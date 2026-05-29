@@ -49,6 +49,9 @@ if (platform === 'linux' && feature === 'cuda') {
 
 // Build the tauri command
 let tauriCmd = `tauri ${command}`;
+if (command === 'dev') {
+  tauriCmd += ' --config src-tauri/tauri.dev.conf.json';
+}
 if (feature && feature !== 'none') {
   tauriCmd += ` -- --features ${feature}`;
   console.log(`🚀 Running: tauri ${command} with features: ${feature}`);
