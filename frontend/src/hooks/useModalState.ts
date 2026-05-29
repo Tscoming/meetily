@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import { TranscriptModelProps } from '@/components/TranscriptSettings';
+import { useI18n } from '@/i18n';
 
 export type ModalType =
   | 'modelSettings'
@@ -44,6 +45,7 @@ interface UseModalStateReturn {
  * - Auto-close on model download completion
  */
 export function useModalState(transcriptModelConfig?: TranscriptModelProps): UseModalStateReturn {
+  const { t } = useI18n();
   // Modal visibility state
   const [modals, setModals] = useState<ModalState>({
     modelSettings: false,
@@ -175,7 +177,7 @@ export function useModalState(transcriptModelConfig?: TranscriptModelProps): Use
 
         // Auto-close modal if the downloaded model matches the selected one
         if (transcriptModelConfig?.provider === 'localWhisper' && transcriptModelConfig?.model === modelName) {
-          toast.success('Model ready! Closing window...', { duration: 1500 });
+          toast.success(t('model.readyClosing'), { duration: 1500 });
           setTimeout(() => hideModal('modelSelector'), 1500);
         }
       });
@@ -187,7 +189,7 @@ export function useModalState(transcriptModelConfig?: TranscriptModelProps): Use
     };
 
     setupDownloadListeners();
-  }, [transcriptModelConfig, hideModal]);
+  }, [transcriptModelConfig, hideModal, t]);
 
   return {
     modals,

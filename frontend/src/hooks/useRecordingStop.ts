@@ -8,6 +8,7 @@ import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateCon
 import { storageService } from '@/services/storageService';
 import { transcriptService } from '@/services/transcriptService';
 import Analytics from '@/lib/analytics';
+import { useI18n } from '@/i18n';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -37,6 +38,7 @@ export function useRecordingStop(
   setIsRecording: (value: boolean) => void,
   setIsRecordingDisabled: (value: boolean) => void
 ): UseRecordingStopReturn {
+  const { t } = useI18n();
   // USE global state instead
   const recordingState = useRecordingState();
   const {
@@ -142,7 +144,7 @@ export function useRecordingStop(
       console.log('Recording already stopped by RecordingControls, processing transcription...');
 
       // Wait for transcription to complete
-      setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Waiting for transcription...');
+      setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, t('recordingStop.waitingTranscription'));
       console.log('Waiting for transcription to complete...');
 
       const MAX_WAIT_TIME = 60000; // 60 seconds maximum wait (increased for longer processing)
@@ -211,7 +213,7 @@ export function useRecordingStop(
         time_since_stop: flushStartTime - stopStartTime,
         current_transcript_count: transcriptsRef.current.length
       });
-      setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, 'Flushing transcript buffer...');
+      setStatus(RecordingStatus.PROCESSING_TRANSCRIPTS, t('recordingStop.flushingBuffer'));
       flushBuffer();
       const flushEndTime = Date.now();
       console.log('✅ Final buffer flush completed', {
@@ -231,7 +233,7 @@ export function useRecordingStop(
       // This ensures user sees all transcripts streaming in before database save
       if (isCallApi && transcriptionComplete == true) {
 
-        setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
+        setStatus(RecordingStatus.SAVING, t('recordingStop.savingDatabase'));
 
         // Get fresh transcript state (ALL transcripts including late ones)
         const freshTranscripts = [...transcriptsRef.current];
@@ -250,7 +252,7 @@ export function useRecordingStop(
 
         try {
           const responseData = await storageService.saveMeeting(
-            savedMeetingName || meetingTitle || 'New Meeting',  // PREFER savedMeetingName (backend source)
+            savedMeetingName || meetingTitle || t('recordingStop.newMeeting'),  // PREFER savedMeetingName (backend source)
             freshTranscripts,
             folderPath
           );
@@ -288,17 +290,17 @@ export function useRecordingStop(
             }
           } catch (error) {
             console.warn('Could not fetch meeting details, using ID only:', error);
-            setCurrentMeeting({ id: meetingId, title: savedMeetingName || meetingTitle || 'New Meeting' });
+            setCurrentMeeting({ id: meetingId, title: savedMeetingName || meetingTitle || t('recordingStop.newMeeting') });
           }
 
           // Mark as completed
           setStatus(RecordingStatus.COMPLETED);
 
           // Show success toast with navigation option
-          toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
+          toast.success(t('recordingStop.savedTitle'), {
+            description: `${freshTranscripts.length} ${t('recordingStop.savedDescription')}`,
             action: {
-              label: 'View Meeting',
+              label: t('recordingStop.viewMeeting'),
               onClick: () => {
                 router.push(`/meeting-details?id=${meetingId}`);
                 Analytics.trackButtonClick('view_meeting_from_toast', 'recording_complete');
@@ -369,9 +371,9 @@ export function useRecordingStop(
 
         } catch (saveError) {
           console.error('Failed to save meeting to database:', saveError);
-          setStatus(RecordingStatus.ERROR, saveError instanceof Error ? saveError.message : 'Unknown error');
-          toast.error('Failed to save meeting', {
-            description: saveError instanceof Error ? saveError.message : 'Unknown error'
+          setStatus(RecordingStatus.ERROR, saveError instanceof Error ? saveError.message : t('common.unknownError'));
+          toast.error(t('recordingStop.saveFailed'), {
+            description: saveError instanceof Error ? saveError.message : t('common.unknownError')
           });
           throw saveError;
         }
@@ -407,6 +409,7 @@ export function useRecordingStop(
     meetings,
     setIsMeetingActive,
     router,
+    t,
   ]);
 
   // Expose handleRecordingStop function to window for Rust callbacks

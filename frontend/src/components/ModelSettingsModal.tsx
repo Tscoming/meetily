@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/command';
 import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useI18n } from '@/i18n';
 
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
@@ -114,6 +115,7 @@ export function ModelSettingsModal({
   onSave,
   skipInitialFetch = false,
 }: ModelSettingsModalProps) {
+  const { t } = useI18n();
   // Use ConfigContext if available, fallback to props for backward compatibility
   const configContext = useConfig();
   const modelConfig = configContext?.modelConfig || propsModelConfig;
@@ -416,7 +418,7 @@ export function ModelSettingsModal({
 
     // Validate URL if provided
     if (trimmedEndpoint && !validateOllamaEndpoint(trimmedEndpoint)) {
-      const errorMsg = 'Invalid Ollama endpoint URL. Must start with http:// or https://';
+      const errorMsg = t('model.invalidOllamaEndpoint');
       setError(errorMsg);
       if (!silent) {
         toast.error(errorMsg);
@@ -439,7 +441,7 @@ export function ModelSettingsModal({
       // Successfully fetched models, Ollama is installed
       setOllamaNotInstalled(false);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load Ollama models';
+      const errorMsg = err instanceof Error ? err.message : t('model.failedLoadOllama');
       setError(errorMsg);
 
       // Check if error indicates Ollama is not installed
@@ -494,7 +496,7 @@ export function ModelSettingsModal({
     } catch (err) {
       console.error('Error loading OpenRouter models:', err);
       setOpenRouterError(
-        err instanceof Error ? err.message : 'Failed to load OpenRouter models'
+        err instanceof Error ? err.message : t('model.failedLoadOpenRouter')
       );
     } finally {
       setIsLoadingOpenRouter(false);
@@ -517,7 +519,7 @@ export function ModelSettingsModal({
       }
     } catch (err) {
       console.error('Error loading Built-in AI models:', err);
-      toast.error('Failed to load Built-in AI models');
+      toast.error(t('model.failedToLoad'));
     }
   };
 
@@ -627,7 +629,7 @@ export function ModelSettingsModal({
         console.log('Custom OpenAI config saved successfully');
       } catch (err) {
         console.error('Failed to save custom OpenAI config:', err);
-        toast.error('Failed to save custom OpenAI configuration');
+        toast.error(t('model.customOpenAISaveFailed'));
         return;
       }
     }
@@ -669,7 +671,7 @@ export function ModelSettingsModal({
   // Test custom OpenAI connection
   const testCustomOpenAIConnection = async () => {
     if (!customOpenAIEndpoint.trim() || !customOpenAIModel.trim()) {
-      toast.error('Please enter endpoint URL and model name first');
+      toast.error(t('model.enterEndpointModel'));
       return;
     }
 
@@ -680,7 +682,7 @@ export function ModelSettingsModal({
         apiKey: customOpenAIApiKey.trim() || null,
         model: customOpenAIModel.trim(),
       });
-      toast.success(result.message || 'Connection successful!');
+      toast.success(result.message || t('model.connectionSuccess'));
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       toast.error(errorMsg);
@@ -702,8 +704,8 @@ export function ModelSettingsModal({
 
     // Prevent duplicate downloads (defense in depth - backend also checks)
     if (isDownloading(recommendedModel)) {
-      toast.info(`${recommendedModel} is already downloading`, {
-        description: `Progress: ${Math.round(getProgress(recommendedModel) || 0)}%`
+      toast.info(`${recommendedModel} ${t('model.alreadyDownloading')}`, {
+        description: `${t('model.progress')}: ${Math.round(getProgress(recommendedModel) || 0)}%`
       });
       return;
     }
@@ -724,16 +726,16 @@ export function ModelSettingsModal({
       // Note: Model is NOT auto-selected - user must explicitly choose it
       // This respects the database as the single source of truth
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to download model';
+      const errorMsg = err instanceof Error ? err.message : t('model.downloadFailed');
       console.error('Error downloading model:', err);
 
       // Check if Ollama is not installed and show appropriate error
       if (isOllamaNotInstalledError(errorMsg)) {
-        toast.error('Ollama is not installed', {
-          description: 'Please download and install Ollama before downloading models.',
+        toast.error(t('meetingDetails.ollamaNotInstalled'), {
+          description: t('meetingDetails.ollamaInstallDescription'),
           duration: 7000,
           action: {
-            label: 'Download',
+            label: t('meetingDetails.download'),
             onClick: () => invoke('open_external_url', { url: 'https://ollama.com/download' })
           }
         });
@@ -753,10 +755,10 @@ export function ModelSettingsModal({
         endpoint
       });
 
-      toast.success(`Model ${modelName} deleted`);
+      toast.success(`${modelName} ${t('model.deleted')}`);
       await fetchOllamaModels(true); // Refresh list
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to delete model';
+      const errorMsg = err instanceof Error ? err.message : t('model.failedDelete');
       toast.error(errorMsg);
       console.error('Error deleting model:', err);
     }
@@ -802,12 +804,12 @@ export function ModelSettingsModal({
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Model Settings</h3>
+        <h3 className="text-lg font-semibold">{t('model.settingsTitle')}</h3>
       </div>
 
       <div className="space-y-4">
         <div>
-          <Label>Summarization Model</Label>
+          <Label>{t('model.summarizationModel')}</Label>
           <div className="flex space-x-2 mt-1">
             <Select
               value={modelConfig.provider}
@@ -869,10 +871,10 @@ export function ModelSettingsModal({
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select provider" />
+                <SelectValue placeholder={t('model.selectProvider')} />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
-                <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
+                <SelectItem value="builtin-ai">{t('model.builtinAiOption')}</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>
@@ -892,14 +894,14 @@ export function ModelSettingsModal({
                     className="flex-1 max-w-[200px] justify-between font-normal"
                   >
                     <span className="truncate">
-                      {modelConfig.model || "Select model..."}
+                      {modelConfig.model || t('model.selectModel')}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[250px] p-0" align="start">
                   <Command>
-                    <CommandInput placeholder="Search models..." />
+                    <CommandInput placeholder={t('model.searchModels')} />
                     <CommandList className="max-h-[300px]">
                       {(modelConfig.provider === 'openrouter' && isLoadingOpenRouter) ||
                        (modelConfig.provider === 'openai' && isLoadingOpenAI) ||
@@ -907,11 +909,11 @@ export function ModelSettingsModal({
                        (modelConfig.provider === 'groq' && isLoadingGroq) ? (
                         <div className="py-6 text-center text-sm text-muted-foreground">
                           <RefreshCw className="mx-auto h-4 w-4 animate-spin mb-2" />
-                          Loading models...
+                          {t('model.loadingModels')}
                         </div>
                       ) : (
                         <>
-                          <CommandEmpty>No models found.</CommandEmpty>
+                          <CommandEmpty>{t('model.noModelsFound')}</CommandEmpty>
                           <CommandGroup>
                             {modelOptions[modelConfig.provider]?.map((model) => (
                               <CommandItem
@@ -1118,7 +1120,7 @@ export function ModelSettingsModal({
               className="flex items-center justify-between cursor-pointer py-2"
               onClick={() => setIsEndpointSectionCollapsed(!isEndpointSectionCollapsed)}
             >
-              <Label className="cursor-pointer">Custom Endpoint (optional)</Label>
+              <Label className="cursor-pointer">{t('model.customEndpoint')}</Label>
               {isEndpointSectionCollapsed ? (
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               ) : (
@@ -1129,7 +1131,7 @@ export function ModelSettingsModal({
             {!isEndpointSectionCollapsed && (
               <>
                 <p className="text-sm text-muted-foreground mt-1 mb-2">
-                  Leave empty or enter a custom endpoint (e.g., http://x.yy.zz:11434)
+                  {t('model.customEndpointDescription')}
                 </p>
                 <div className="flex gap-2 mt-1">
                   <div className="relative flex-1">
@@ -1168,12 +1170,12 @@ export function ModelSettingsModal({
                     {isLoadingOllama ? (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Fetching...
+                        {t('model.fetching')}
                       </>
                     ) : (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4" />
-                        Fetch Models
+                        {t('model.fetchModels')}
                       </>
                     )}
                   </Button>
@@ -1193,10 +1195,10 @@ export function ModelSettingsModal({
         {modelConfig.provider === 'ollama' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold">Available Ollama Models</h4>
+              <h4 className="text-sm font-bold">{t('model.availableOllamaModels')}</h4>
               {lastFetchedEndpoint && models.length > 0 && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">Using:</span>
+                  <span className="text-muted-foreground">{t('model.using')}</span>
                   <code className="px-2 py-1 bg-muted rounded text-xs">
                     {lastFetchedEndpoint || 'http://localhost:11434'}
                   </code>
@@ -1206,7 +1208,7 @@ export function ModelSettingsModal({
             {models.length > 0 && (
               <div className="mb-4">
                 <Input
-                  placeholder="Search models..."
+                  placeholder={t('model.searchModels')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full"
@@ -1216,7 +1218,7 @@ export function ModelSettingsModal({
             {isLoadingOllama ? (
               <div className="text-center py-8 text-muted-foreground">
                 <RefreshCw className="mx-auto h-8 w-8 animate-spin mb-2" />
-                Loading models...
+                {t('model.loadingModels')}
               </div>
             ) : models.length === 0 ? (
               <div className="space-y-3">

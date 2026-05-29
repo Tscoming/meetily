@@ -7,6 +7,7 @@ import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useI18n } from '@/i18n';
 
 const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
@@ -22,6 +23,7 @@ interface DownloadState {
 }
 
 export function DownloadProgressStep() {
+  const { t } = useI18n();
   const {
     goNext,
     selectedSummaryModel,
@@ -90,8 +92,8 @@ export function DownloadProgressStep() {
         error: error instanceof Error ? error.message : 'Retry failed',
       }));
 
-      toast.error('Download retry failed', {
-        description: 'Please check your connection and try again.',
+      toast.error(t('onboarding.downloadRetryFailed'), {
+        description: t('onboarding.checkConnectionRetry'),
       });
     } finally {
       // Allow retry again after 2 seconds
@@ -133,8 +135,8 @@ export function DownloadProgressStep() {
         error: error instanceof Error ? error.message : 'Retry failed',
       }));
 
-      toast.error('Summary model download retry failed', {
-        description: 'Please check your connection and try again.',
+      toast.error(t('onboarding.summaryDownloadRetryFailed'), {
+        description: t('onboarding.checkConnectionRetry'),
       });
     } finally {
       // Allow retry again after 2 seconds
@@ -308,8 +310,8 @@ export function DownloadProgressStep() {
           progress: 100,
         }));
       } else if (!actuallyAvailable && parakeetState.status === 'error') {
-        toast.error('Transcription engine required', {
-          description: 'Please retry the download before continuing.',
+        toast.error(t('onboarding.transcriptionRequired'), {
+          description: t('onboarding.retryBeforeContinuing'),
         });
         return;
       }
@@ -323,8 +325,8 @@ export function DownloadProgressStep() {
 
     // Show toast if downloads still in progress
     if (!downloadsComplete) {
-      toast.info('Downloads will continue in the background', {
-        description: 'You can start using the app. Recording will be available once speech recognition is ready.',
+      toast.info(t('onboarding.downloadsContinue'), {
+        description: t('onboarding.downloadsContinueDescription'),
         duration: 5000,
       });
     }
@@ -344,8 +346,8 @@ export function DownloadProgressStep() {
         window.location.reload();
       } catch (error) {
         console.error('Failed to complete onboarding:', error);
-        toast.error('Failed to complete setup', {
-          description: 'Please try again.',
+        toast.error(t('onboarding.completeFailed'), {
+          description: t('onboarding.tryAgain'),
         });
         setIsCompleting(false);
       }

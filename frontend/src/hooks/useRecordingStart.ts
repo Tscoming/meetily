@@ -8,6 +8,7 @@ import { recordingService } from '@/services/recordingService';
 import Analytics from '@/lib/analytics';
 import { showRecordingNotification } from '@/lib/recordingNotification';
 import { toast } from 'sonner';
+import { useI18n } from '@/i18n';
 
 interface UseRecordingStartReturn {
   handleRecordingStart: () => Promise<void>;
@@ -30,6 +31,7 @@ export function useRecordingStart(
   setIsRecording: (value: boolean) => void,
   showModal?: (name: 'modelSelector', message?: string) => void
 ): UseRecordingStartReturn {
+  const { t } = useI18n();
   const [isAutoStarting, setIsAutoStarting] = useState(false);
 
   const { clearTranscripts, setMeetingTitle } = useTranscripts();
@@ -89,17 +91,17 @@ export function useRecordingStart(
       if (!parakeetReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info(t('recordingStart.modelDownloadTitle'), {
+            description: t('recordingStart.modelDownloadDescription'),
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'home_page');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error(t('recordingStart.modelMissingTitle'), {
+            description: t('recordingStart.modelMissingDescription'),
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', t('recordingStart.modelSetupRequired'));
           Analytics.trackButtonClick('start_recording_blocked_missing', 'home_page');
         }
         setStatus(RecordingStatus.IDLE);
@@ -112,7 +114,7 @@ export function useRecordingStart(
       setMeetingTitle(randomTitle);
 
       // Set STARTING status before initiating backend recording
-      setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+      setStatus(RecordingStatus.STARTING, t('recordingStart.initializing'));
 
       // Start the actual backend recording
       console.log('Starting backend recording with meeting:', randomTitle);
@@ -135,13 +137,13 @@ export function useRecordingStart(
       await showRecordingNotification();
     } catch (error) {
       console.error('Failed to start recording:', error);
-      setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Failed to start recording');
+      setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : t('recordingStart.failed'));
       setIsRecording(false); // Reset state on error
       Analytics.trackButtonClick('start_recording_error', 'home_page');
       // Re-throw so RecordingControls can handle device-specific errors
       throw error;
     }
-  }, [generateMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus]);
+  }, [generateMeetingTitle, setMeetingTitle, setIsRecording, clearTranscripts, setIsMeetingActive, checkParakeetReady, checkIfModelDownloading, selectedDevices, showModal, setStatus, t]);
 
   // Check for autoStartRecording flag and start recording automatically
   useEffect(() => {
@@ -158,17 +160,17 @@ export function useRecordingStart(
           if (!parakeetReady) {
             const isDownloading = await checkIfModelDownloading();
             if (isDownloading) {
-              toast.info('Model download in progress', {
-                description: 'Please wait for the transcription model to finish downloading before recording.',
+              toast.info(t('recordingStart.modelDownloadTitle'), {
+                description: t('recordingStart.modelDownloadDescription'),
                 duration: 5000,
               });
               Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_auto');
             } else {
-              toast.error('Transcription model not ready', {
-                description: 'Please download a transcription model before recording.',
+              toast.error(t('recordingStart.modelMissingTitle'), {
+                description: t('recordingStart.modelMissingDescription'),
                 duration: 5000,
               });
-              showModal?.('modelSelector', 'Transcription model setup required');
+              showModal?.('modelSelector', t('recordingStart.modelSetupRequired'));
               Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_auto');
             }
             setStatus(RecordingStatus.IDLE);
@@ -182,7 +184,7 @@ export function useRecordingStart(
             const generatedMeetingTitle = generateMeetingTitle();
 
             // Set STARTING status before initiating backend recording
-            setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+            setStatus(RecordingStatus.STARTING, t('recordingStart.initializing'));
 
             console.log('Auto-starting backend recording with meeting:', generatedMeetingTitle);
             const result = await recordingService.startRecordingWithDevices(
@@ -204,8 +206,8 @@ export function useRecordingStart(
             await showRecordingNotification();
           } catch (error) {
             console.error('Failed to auto-start recording:', error);
-            setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Failed to auto-start recording');
-            alert('Failed to start recording. Check console for details.');
+            setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : t('recordingStart.failed'));
+            alert(t('recordingControls.initFailed'));
             Analytics.trackButtonClick('start_recording_error', 'sidebar_auto');
           } finally {
             setIsAutoStarting(false);
@@ -228,6 +230,7 @@ export function useRecordingStart(
     checkIfModelDownloading,
     showModal,
     setStatus,
+    t,
   ]);
 
   // Listen for direct recording trigger from sidebar when already on home page
@@ -246,17 +249,17 @@ export function useRecordingStart(
       if (!parakeetReady) {
         const isDownloading = await checkIfModelDownloading();
         if (isDownloading) {
-          toast.info('Model download in progress', {
-            description: 'Please wait for the transcription model to finish downloading before recording.',
+          toast.info(t('recordingStart.modelDownloadTitle'), {
+            description: t('recordingStart.modelDownloadDescription'),
             duration: 5000,
           });
           Analytics.trackButtonClick('start_recording_blocked_downloading', 'sidebar_direct');
         } else {
-          toast.error('Transcription model not ready', {
-            description: 'Please download a transcription model before recording.',
+          toast.error(t('recordingStart.modelMissingTitle'), {
+            description: t('recordingStart.modelMissingDescription'),
             duration: 5000,
           });
-          showModal?.('modelSelector', 'Transcription model setup required');
+          showModal?.('modelSelector', t('recordingStart.modelSetupRequired'));
           Analytics.trackButtonClick('start_recording_blocked_missing', 'sidebar_direct');
         }
         setStatus(RecordingStatus.IDLE);
@@ -269,7 +272,7 @@ export function useRecordingStart(
         const generatedMeetingTitle = generateMeetingTitle();
 
         // Set STARTING status before initiating backend recording
-        setStatus(RecordingStatus.STARTING, 'Initializing recording...');
+        setStatus(RecordingStatus.STARTING, t('recordingStart.initializing'));
 
         console.log('Starting backend recording with meeting:', generatedMeetingTitle);
         const result = await recordingService.startRecordingWithDevices(
@@ -291,8 +294,8 @@ export function useRecordingStart(
         await showRecordingNotification();
       } catch (error) {
         console.error('Failed to start recording from sidebar:', error);
-        setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : 'Failed to start recording from sidebar');
-        alert('Failed to start recording. Check console for details.');
+        setStatus(RecordingStatus.ERROR, error instanceof Error ? error.message : t('recordingStart.failed'));
+        alert(t('recordingControls.initFailed'));
         Analytics.trackButtonClick('start_recording_error', 'sidebar_direct');
       } finally {
         setIsAutoStarting(false);
@@ -317,6 +320,7 @@ export function useRecordingStart(
     checkIfModelDownloading,
     showModal,
     setStatus,
+    t,
   ]);
 
   return {

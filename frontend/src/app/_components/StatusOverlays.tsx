@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n';
+
 interface StatusOverlaysProps {
   // Status flags
   isProcessing: boolean;      // Processing transcription after recording stops
@@ -42,19 +44,21 @@ export function StatusOverlays({
   isSaving,
   sidebarCollapsed
 }: StatusOverlaysProps) {
+  const { t } = useI18n();
+
   return (
     <>
       {/* Processing status overlay - shown after recording stops while finalizing transcription */}
       <StatusOverlay
         show={isProcessing}
-        message="Finalizing transcription..."
+        message={t('recordingStatus.finalizing')}
         sidebarCollapsed={sidebarCollapsed}
       />
 
       {/* Saving status overlay - shown while saving transcript to database */}
       <StatusOverlay
         show={isSaving}
-        message="Saving transcript..."
+        message={t('recordingStatus.saving')}
         sidebarCollapsed={sidebarCollapsed}
       />
     </>

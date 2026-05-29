@@ -7,6 +7,7 @@ import { useRecordingState } from './RecordingStateContext';
 import { transcriptService } from '@/services/transcriptService';
 import { recordingService } from '@/services/recordingService';
 import { indexedDBService } from '@/services/indexedDBService';
+import { translateUi } from '@/i18n';
 
 interface TranscriptContextType {
   transcripts: Transcript[];
@@ -469,7 +470,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
       .join('\n');
     navigator.clipboard.writeText(fullTranscript);
 
-    toast.success("Transcript copied to clipboard");
+    toast.success(translateUi('meetingDetails.transcriptCopied'));
   }, [transcripts]);
 
   // Force flush buffer (for final transcript processing)

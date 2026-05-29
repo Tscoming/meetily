@@ -11,6 +11,7 @@ import {
   getModelDisplayName,
   formatFileSize
 } from '../lib/parakeet';
+import { useI18n } from '@/i18n';
 
 interface ParakeetModelManagerProps {
   selectedModel?: string;
@@ -25,6 +26,7 @@ export function ParakeetModelManager({
   className = '',
   autoSave = false
 }: ParakeetModelManagerProps) {
+  const { t } = useI18n();
   const [models, setModels] = useState<ParakeetModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +60,9 @@ export function ParakeetModelManager({
         setInitialized(true);
       } catch (err) {
         console.error('Failed to initialize Parakeet:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load models');
-        toast.error('Failed to load transcription models', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        setError(err instanceof Error ? err.message : t('model.failedToLoad'));
+        toast.error(t('model.failedToLoad'), {
+          description: err instanceof Error ? err.message : t('common.unknownError'),
           duration: 5000
         });
       } finally {
@@ -69,7 +71,7 @@ export function ParakeetModelManager({
     };
 
     initializeModels();
-  }, [initialized, selectedModel, onModelSelect]);
+  }, [initialized, selectedModel, onModelSelect, t]);
 
   // Set up event listeners for download progress
   useEffect(() => {
@@ -133,8 +135,8 @@ export function ParakeetModelManager({
           // Clean up throttle data
           progressThrottleRef.current.delete(modelName);
 
-          toast.success(`${displayInfo?.icon || '✓'} ${displayName} ready!`, {
-            description: 'Model downloaded and ready to use',
+          toast.success(`${displayInfo?.icon || '✓'} ${displayName} ${t('model.readyTitle')}`, {
+            description: t('model.readyDescription'),
             duration: 4000
           });
 
@@ -173,11 +175,11 @@ export function ParakeetModelManager({
           // Clean up throttle data
           progressThrottleRef.current.delete(modelName);
 
-          toast.error(`Failed to download ${displayName}`, {
+          toast.error(`${t('model.downloadFailed')} ${displayName}`, {
             description: error,
             duration: 6000,
             action: {
-              label: 'Retry',
+              label: t('common.retry'),
               onClick: () => downloadModel(modelName)
             }
           });
@@ -193,7 +195,7 @@ export function ParakeetModelManager({
       if (unlistenComplete) unlistenComplete();
       if (unlistenError) unlistenError();
     };
-  }, []); // Empty dependency array - listeners use refs for stable callbacks
+  }, [t]); // Listeners use refs for stable callbacks
 
   const saveModelSelection = async (modelName: string) => {
     try {
@@ -231,13 +233,13 @@ export function ParakeetModelManager({
       // Clean up throttle data
       progressThrottleRef.current.delete(modelName);
 
-      toast.info(`${displayName} download cancelled`, {
+      toast.info(`${displayName} ${t('model.downloadCancelled')}`, {
         duration: 3000
       });
     } catch (err) {
       console.error('Failed to cancel download:', err);
-      toast.error('Failed to cancel download', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error(t('model.failedCancelDownload'), {
+        description: err instanceof Error ? err.message : t('common.unknownError'),
         duration: 4000
       });
     }
@@ -260,8 +262,8 @@ export function ParakeetModelManager({
         )
       );
 
-      toast.info(`Downloading ${displayName}...`, {
-        description: 'This may take a few minutes',
+      toast.info(`${t('model.downloadingModel')} ${displayName}...`, {
+        description: t('model.downloadMayTake'),
         duration: 5000  // Auto-dismiss after 5 seconds
       });
 
@@ -274,7 +276,7 @@ export function ParakeetModelManager({
         return newSet;
       });
 
-      const errorMessage = err instanceof Error ? err.message : 'Download failed';
+      const errorMessage = err instanceof Error ? err.message : t('model.downloadFailed');
       setModels(prev =>
         prev.map(model =>
           model.name === modelName ? { ...model, status: { Error: errorMessage } } : model
@@ -294,7 +296,7 @@ export function ParakeetModelManager({
 
     const displayInfo = getModelDisplayInfo(modelName);
     const displayName = displayInfo?.friendlyName || modelName;
-    toast.success(`Switched to ${displayName}`, {
+    toast.success(`${t('model.switchedTo')} ${displayName}`, {
       duration: 3000
     });
   };
@@ -310,8 +312,8 @@ export function ParakeetModelManager({
       const modelList = await ParakeetAPI.getAvailableModels();
       setModels(modelList);
 
-      toast.success(`${displayName} deleted`, {
-        description: 'Model removed to free up space',
+      toast.success(`${displayName} ${t('model.deleted')}`, {
+        description: t('model.deletedDescription'),
         duration: 3000
       });
 
@@ -321,8 +323,8 @@ export function ParakeetModelManager({
       }
     } catch (err) {
       console.error('Failed to delete model:', err);
-      toast.error(`Failed to delete ${displayName}`, {
-        description: err instanceof Error ? err.message : 'Delete failed',
+      toast.error(`${t('model.failedDelete')} ${displayName}`, {
+        description: err instanceof Error ? err.message : t('model.failedDelete'),
         duration: 4000
       });
     }

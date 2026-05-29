@@ -14,6 +14,7 @@ import {
   WhisperAPI
 } from '../lib/whisper';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useI18n } from '@/i18n';
 
 interface ModelManagerProps {
   selectedModel?: string;
@@ -28,6 +29,7 @@ export function ModelManager({
   className = '',
   autoSave = false
 }: ModelManagerProps) {
+  const { t } = useI18n();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,9 +108,9 @@ export function ModelManager({
         setInitialized(true);
       } catch (err) {
         console.error('Failed to initialize Whisper:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load models');
-        toast.error('Failed to load transcription models', {
-          description: err instanceof Error ? err.message : 'Unknown error',
+        setError(err instanceof Error ? err.message : t('model.failedToLoad'));
+        toast.error(t('model.failedToLoad'), {
+          description: err instanceof Error ? err.message : t('common.unknownError'),
           duration: 5000
         });
       } finally {
@@ -117,7 +119,7 @@ export function ModelManager({
     };
 
     initializeModels();
-  }, [initialized, selectedModel, onModelSelect]);
+  }, [initialized, selectedModel, onModelSelect, t]);
 
   // Set up event listeners for download progress
   useEffect(() => {
@@ -181,8 +183,8 @@ export function ModelManager({
           // Clean up throttle data
           progressThrottleRef.current.delete(modelName);
 
-          toast.success(`${getModelIcon(model?.accuracy || 'Good')} ${displayName} ready!`, {
-            description: 'Model downloaded and ready to use',
+          toast.success(`${getModelIcon(model?.accuracy || 'Good')} ${displayName} ${t('model.readyTitle')}`, {
+            description: t('model.readyDescription'),
             duration: 4000
           });
 
@@ -220,11 +222,11 @@ export function ModelManager({
           // Clean up throttle data
           progressThrottleRef.current.delete(modelName);
 
-          toast.error(`Failed to download ${displayName}`, {
+          toast.error(`${t('model.downloadFailed')} ${displayName}`, {
             description: error,
             duration: 6000,
             action: {
-              label: 'Retry',
+              label: t('common.retry'),
               onClick: () => downloadModel(modelName)
             }
           });
@@ -240,7 +242,7 @@ export function ModelManager({
       if (unlistenComplete) unlistenComplete();
       if (unlistenError) unlistenError();
     };
-  }, []); // Empty dependency array - listeners use refs for stable callbacks
+  }, [t]); // Listeners use refs for stable callbacks
 
   const saveModelSelection = async (modelName: string) => {
     try {
@@ -277,13 +279,13 @@ export function ModelManager({
       // Clean up throttle data
       progressThrottleRef.current.delete(modelName);
 
-      toast.info(`${displayName} download cancelled`, {
+      toast.info(`${displayName} ${t('model.downloadCancelled')}`, {
         duration: 3000
       });
     } catch (err) {
       console.error('Failed to cancel download:', err);
-      toast.error('Failed to cancel download', {
-        description: err instanceof Error ? err.message : 'Unknown error',
+      toast.error(t('model.failedCancelDownload'), {
+        description: err instanceof Error ? err.message : t('common.unknownError'),
         duration: 4000
       });
     }
@@ -305,8 +307,8 @@ export function ModelManager({
         )
       );
 
-      toast.info(`Downloading ${displayName}...`, {
-        description: 'This may take a few minutes',
+      toast.info(`${t('model.downloadingModel')} ${displayName}...`, {
+        description: t('model.downloadMayTake'),
         duration: 5000
       });
 
@@ -319,7 +321,7 @@ export function ModelManager({
         return newSet;
       });
 
-      const errorMessage = err instanceof Error ? err.message : 'Download failed';
+      const errorMessage = err instanceof Error ? err.message : t('model.downloadFailed');
       setModels(prev =>
         prev.map(model =>
           model.name === modelName ? { ...model, status: { Error: errorMessage } } : model
@@ -340,7 +342,7 @@ export function ModelManager({
     }
 
     const displayName = getDisplayName(modelName);
-    toast.success(`Switched to ${displayName}`, {
+    toast.success(`${t('model.switchedTo')} ${displayName}`, {
       duration: 3000
     });
   };
@@ -355,8 +357,8 @@ export function ModelManager({
       const modelList = await WhisperAPI.getAvailableModels();
       setModels(modelList);
 
-      toast.success(`${displayName} deleted`, {
-        description: 'Model removed to free up space',
+      toast.success(`${displayName} ${t('model.deleted')}`, {
+        description: t('model.deletedDescription'),
         duration: 3000
       });
 
@@ -366,8 +368,8 @@ export function ModelManager({
       }
     } catch (err) {
       console.error('Failed to delete model:', err);
-      toast.error(`Failed to delete ${displayName}`, {
-        description: err instanceof Error ? err.message : 'Delete failed',
+      toast.error(`${t('model.failedDelete')} ${displayName}`, {
+        description: err instanceof Error ? err.message : t('model.failedDelete'),
         duration: 4000
       });
     }
@@ -447,7 +449,7 @@ export function ModelManager({
         <Accordion type="single" collapsible className="w-full">
           <AccordionItem value="advanced-models">
             <AccordionTrigger>
-              <span className='text-lg'>Advanced Models</span>
+              <span className='text-lg'>{t('transcript.advancedModels')}</span>
             </AccordionTrigger>
             <AccordionContent>
               <div className="space-y-3 pt-4">
@@ -482,7 +484,7 @@ export function ModelManager({
           animate={{ opacity: 1, y: 0 }}
           className="text-xs text-gray-500 text-center pt-2"
         >
-          Using {getDisplayName(selectedModel)} for transcription
+          {t('transcript.usingModelPrefix')} {getDisplayName(selectedModel)} {t('transcript.usingModelSuffix')}
         </motion.div>
       )}
     </div>
