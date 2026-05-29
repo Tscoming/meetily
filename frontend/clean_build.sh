@@ -52,6 +52,4 @@ pnpm run build
 # Set environment variables for the build
 
 echo "Building Tauri app..."
-pnpm run tauri build
-sleep
-
+pnpm run tauri build --config src-tauri/tauri.installer.conf.json

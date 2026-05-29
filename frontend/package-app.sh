@@ -15,6 +15,6 @@ echo "Building Next.js app..."
 pnpm build
 
 echo "Building Tauri app..."
-pnpm tauri build
+pnpm tauri build --config src-tauri/tauri.installer.conf.json
 
 echo "App packaging complete! Check src-tauri/target/release/bundle for the packaged app."
