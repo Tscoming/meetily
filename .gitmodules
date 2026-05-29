@@ -2,3 +2,4 @@
 	path = backend/whisper.cpp
 	url = https://github.com/Zackriya-Solutions/whisper.cpp
 	branch = develop
+	ignore = dirty
