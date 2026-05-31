@@ -6,17 +6,17 @@ interface StatusOverlaysProps {
   isSaving: boolean;          // Saving transcript to database
 
   // Layout
-  sidebarCollapsed: boolean;  // For responsive margin calculation
+  sidebarOffset: number;      // Current left sidebar width
 }
 
 // Internal reusable component for individual status overlays
 interface StatusOverlayProps {
   show: boolean;
   message: string;
-  sidebarCollapsed: boolean;
+  sidebarOffset: number;
 }
 
-function StatusOverlay({ show, message, sidebarCollapsed }: StatusOverlayProps) {
+function StatusOverlay({ show, message, sidebarOffset }: StatusOverlayProps) {
   if (!show) return null;
 
   return (
@@ -24,7 +24,7 @@ function StatusOverlay({ show, message, sidebarCollapsed }: StatusOverlayProps) 
       <div
         className="flex justify-center pl-8 transition-[margin] duration-300"
         style={{
-          marginLeft: sidebarCollapsed ? '4rem' : '16rem'
+          marginLeft: sidebarOffset
         }}
       >
         <div className="w-2/3 max-w-[750px] flex justify-center">
@@ -42,7 +42,7 @@ function StatusOverlay({ show, message, sidebarCollapsed }: StatusOverlayProps) 
 export function StatusOverlays({
   isProcessing,
   isSaving,
-  sidebarCollapsed
+  sidebarOffset
 }: StatusOverlaysProps) {
   const { t } = useI18n();
 
@@ -52,14 +52,14 @@ export function StatusOverlays({
       <StatusOverlay
         show={isProcessing}
         message={t('recordingStatus.finalizing')}
-        sidebarCollapsed={sidebarCollapsed}
+        sidebarOffset={sidebarOffset}
       />
 
       {/* Saving status overlay - shown while saving transcript to database */}
       <StatusOverlay
         show={isSaving}
         message={t('recordingStatus.saving')}
-        sidebarCollapsed={sidebarCollapsed}
+        sidebarOffset={sidebarOffset}
       />
     </>
   );
