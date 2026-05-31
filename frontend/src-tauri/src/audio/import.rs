@@ -3,8 +3,9 @@
 use crate::api::TranscriptSegment;
 use crate::audio::decoder::{decode_audio_file, decode_audio_file_with_progress};
 use crate::audio::vad::get_speech_chunks_with_progress;
-use crate::config::{DEFAULT_WHISPER_MODEL, DEFAULT_PARAKEET_MODEL};
+use crate::config::{DEFAULT_WHISPER_MODEL, DEFAULT_PARAKEET_MODEL, DEFAULT_QWEN3_ASR_MODEL};
 use crate::parakeet_engine::ParakeetEngine;
+use crate::qwen3_asr_engine::Qwen3AsrEngine;
 use crate::state::AppState;
 use crate::whisper_engine::WhisperEngine;
 use anyhow::{anyhow, Result};
@@ -266,6 +267,7 @@ pub async fn start_import<R: Runtime>(
     IMPORT_CANCELLED.store(false, Ordering::SeqCst);
 
     let use_parakeet = provider.as_deref() == Some("parakeet");
+    let use_qwen3_asr = provider.as_deref() == Some("qwen3Asr");
     let result = run_import(
         app.clone(),
         source_path,
@@ -277,7 +279,11 @@ pub async fn start_import<R: Runtime>(
     .await;
 
     // Unload the engine after the batch job (success, failure, or cancellation)
-    super::common::unload_engine_after_batch(use_parakeet).await;
+    if use_qwen3_asr {
+        super::common::unload_qwen3_asr_after_batch().await;
+    } else {
+        super::common::unload_engine_after_batch(use_parakeet).await;
+    }
 
     // Guard will automatically clear flag on drop
     // No need for manual: IMPORT_IN_PROGRESS.store(false, Ordering::SeqCst);
@@ -330,6 +336,7 @@ async fn run_import<R: Runtime>(
 
     // Determine which provider to use (default to whisper)
     let use_parakeet = provider.as_deref() == Some("parakeet");
+    let use_qwen3_asr = provider.as_deref() == Some("qwen3Asr");
 
     emit_progress(&app, "copying", 5, "Creating meeting folder...");
 
@@ -508,13 +515,18 @@ async fn run_import<R: Runtime>(
     emit_progress(&app, "transcribing", 30, "Loading transcription engine...");
 
     // Initialize the appropriate engine
-    let whisper_engine = if !use_parakeet && total_segments > 0 {
+    let whisper_engine = if !use_parakeet && !use_qwen3_asr && total_segments > 0 {
         Some(get_or_init_whisper(&app, model.as_deref()).await?)
     } else {
         None
     };
     let parakeet_engine = if use_parakeet && total_segments > 0 {
         Some(get_or_init_parakeet(&app, model.as_deref()).await?)
+    } else {
+        None
+    };
+    let qwen3_asr_engine = if use_qwen3_asr && total_segments > 0 {
+        Some(get_or_init_qwen3_asr(&app, model.as_deref()).await?)
     } else {
         None
     };
@@ -585,6 +597,13 @@ async fn run_import<R: Runtime>(
                 .transcribe_audio(segment.samples.clone())
                 .await
                 .map_err(|e| anyhow!("Parakeet transcription failed on segment {}: {}", i, e))?;
+            (text, 0.9f32)
+        } else if use_qwen3_asr {
+            let engine = qwen3_asr_engine.as_ref().unwrap();
+            let text = engine
+                .transcribe_audio(segment.samples.clone(), language.clone())
+                .await
+                .map_err(|e| anyhow!("Qwen3-ASR transcription failed on segment {}: {}", i, e))?;
             (text, 0.9f32)
         } else {
             let engine = whisper_engine.as_ref().unwrap();
@@ -839,6 +858,47 @@ async fn get_or_init_parakeet<R: Runtime>(
     }
 }
 
+/// Get or initialize the Qwen3-ASR engine
+async fn get_or_init_qwen3_asr<R: Runtime>(
+    app: &AppHandle<R>,
+    requested_model: Option<&str>,
+) -> Result<Arc<Qwen3AsrEngine>> {
+    use crate::qwen3_asr_engine::commands::QWEN3_ASR_ENGINE;
+
+    let engine = {
+        let guard = QWEN3_ASR_ENGINE.lock().unwrap_or_else(|e| e.into_inner());
+        guard.as_ref().cloned()
+    };
+
+    match engine {
+        Some(e) => {
+            let target_model = match requested_model {
+                Some(model) => model.to_string(),
+                None => get_configured_model(app, "qwen3Asr").await?,
+            };
+
+            let current_model = e.get_current_model().await;
+            let needs_load = match &current_model {
+                Some(loaded) => loaded != &target_model,
+                None => true,
+            };
+
+            if needs_load {
+                if let Err(e) = e.discover_models().await {
+                    warn!("Qwen3-ASR model discovery error (continuing): {}", e);
+                }
+
+                e.load_model(&target_model)
+                    .await
+                    .map_err(|e| anyhow!("Failed to load Qwen3-ASR model '{}': {}", target_model, e))?;
+            }
+
+            Ok(e)
+        }
+        None => Err(anyhow!("Qwen3-ASR engine not initialized")),
+    }
+}
+
 /// Get the configured model from database
 async fn get_configured_model<R: Runtime>(app: &AppHandle<R>, provider_type: &str) -> Result<String> {
     let app_state = app
@@ -856,12 +916,15 @@ async fn get_configured_model<R: Runtime>(app: &AppHandle<R>, provider_type: &st
         Some((provider, model)) => {
             if (provider_type == "whisper" && (provider == "localWhisper" || provider == "whisper"))
                 || (provider_type == "parakeet" && provider == "parakeet")
+                || (provider_type == "qwen3Asr" && provider == "qwen3Asr")
             {
                 Ok(model)
             } else {
                 // Return default model for the requested type
                 Ok(if provider_type == "parakeet" {
                     DEFAULT_PARAKEET_MODEL.to_string()
+                } else if provider_type == "qwen3Asr" {
+                    DEFAULT_QWEN3_ASR_MODEL.to_string()
                 } else {
                     DEFAULT_WHISPER_MODEL.to_string()
                 })
@@ -869,6 +932,8 @@ async fn get_configured_model<R: Runtime>(app: &AppHandle<R>, provider_type: &st
         }
         None => Ok(if provider_type == "parakeet" {
             DEFAULT_PARAKEET_MODEL.to_string()
+        } else if provider_type == "qwen3Asr" {
+            DEFAULT_QWEN3_ASR_MODEL.to_string()
         } else {
             DEFAULT_WHISPER_MODEL.to_string()
         }),

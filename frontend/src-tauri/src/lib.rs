@@ -51,6 +51,7 @@ pub mod anthropic;
 pub mod groq;
 pub mod openrouter;
 pub mod parakeet_engine;
+pub mod qwen3_asr_engine;
 pub mod state;
 pub mod summary;
 pub mod tray;
@@ -458,6 +459,16 @@ pub fn run() {
                 }
             });
 
+            // Set Qwen3-ASR models directory
+            qwen3_asr_engine::commands::set_models_directory(&_app.handle());
+
+            // Initialize Qwen3-ASR engine on startup
+            tauri::async_runtime::spawn(async {
+                if let Err(e) = qwen3_asr_engine::commands::qwen3_asr_init().await {
+                    log::error!("Failed to initialize Qwen3-ASR engine on startup: {}", e);
+                }
+            });
+
             // Initialize ModelManager for summary engine (async, non-blocking)
             let app_handle_for_model_manager = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -557,6 +568,20 @@ pub fn run() {
             parakeet_engine::commands::parakeet_cancel_download,
             parakeet_engine::commands::parakeet_delete_corrupted_model,
             parakeet_engine::commands::open_parakeet_models_folder,
+            // Qwen3-ASR engine commands
+            qwen3_asr_engine::commands::qwen3_asr_init,
+            qwen3_asr_engine::commands::qwen3_asr_get_available_models,
+            qwen3_asr_engine::commands::qwen3_asr_load_model,
+            qwen3_asr_engine::commands::qwen3_asr_get_current_model,
+            qwen3_asr_engine::commands::qwen3_asr_is_model_loaded,
+            qwen3_asr_engine::commands::qwen3_asr_has_available_models,
+            qwen3_asr_engine::commands::qwen3_asr_validate_model_ready,
+            qwen3_asr_engine::commands::qwen3_asr_transcribe_audio,
+            qwen3_asr_engine::commands::qwen3_asr_get_models_directory,
+            qwen3_asr_engine::commands::qwen3_asr_download_model,
+            qwen3_asr_engine::commands::qwen3_asr_cancel_download,
+            qwen3_asr_engine::commands::qwen3_asr_delete_model,
+            qwen3_asr_engine::commands::open_qwen3_asr_models_folder,
             // Parallel processing commands
             whisper_engine::parallel_commands::initialize_parallel_processor,
             whisper_engine::parallel_commands::start_parallel_processing,

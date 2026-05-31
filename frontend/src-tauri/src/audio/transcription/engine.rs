@@ -15,6 +15,7 @@ use tauri::{AppHandle, Manager, Runtime};
 pub enum TranscriptionEngine {
     Whisper(Arc<crate::whisper_engine::WhisperEngine>),  // Direct access (backward compat)
     Parakeet(Arc<crate::parakeet_engine::ParakeetEngine>), // Direct access (backward compat)
+    Qwen3Asr(Arc<crate::qwen3_asr_engine::Qwen3AsrEngine>),
     Provider(Arc<dyn TranscriptionProvider>),  // Trait-based (preferred for new code)
 }
 
@@ -24,6 +25,7 @@ impl TranscriptionEngine {
         match self {
             Self::Whisper(engine) => engine.is_model_loaded().await,
             Self::Parakeet(engine) => engine.is_model_loaded().await,
+            Self::Qwen3Asr(engine) => engine.is_model_loaded().await,
             Self::Provider(provider) => provider.is_model_loaded().await,
         }
     }
@@ -33,6 +35,7 @@ impl TranscriptionEngine {
         match self {
             Self::Whisper(engine) => engine.get_current_model().await,
             Self::Parakeet(engine) => engine.get_current_model().await,
+            Self::Qwen3Asr(engine) => engine.get_current_model().await,
             Self::Provider(provider) => provider.get_current_model().await,
         }
     }
@@ -42,6 +45,7 @@ impl TranscriptionEngine {
         match self {
             Self::Whisper(_) => "Whisper (direct)",
             Self::Parakeet(_) => "Parakeet (direct)",
+            Self::Qwen3Asr(_) => "Qwen3-ASR (direct)",
             Self::Provider(provider) => provider.provider_name(),
         }
     }
@@ -135,10 +139,31 @@ pub async fn validate_transcription_model_ready<R: Runtime>(app: &AppHandle<R>) 
                 }
             }
         }
+        "qwen3Asr" => {
+            info!("🔍 Validating Qwen3-ASR model...");
+            if let Err(init_error) = crate::qwen3_asr_engine::commands::qwen3_asr_init().await {
+                warn!("❌ Failed to initialize Qwen3-ASR engine: {}", init_error);
+                return Err(format!(
+                    "Failed to initialize Qwen3-ASR speech recognition: {}",
+                    init_error
+                ));
+            }
+
+            match crate::qwen3_asr_engine::commands::qwen3_asr_validate_model_ready_with_config(app).await {
+                Ok(model_name) => {
+                    info!("✅ Qwen3-ASR model validation successful: {} is ready", model_name);
+                    Ok(())
+                }
+                Err(e) => {
+                    warn!("❌ Qwen3-ASR model validation failed: {}", e);
+                    Err(e)
+                }
+            }
+        }
         other => {
             warn!("❌ Unsupported transcription provider for local recording: {}", other);
             Err(format!(
-                "Provider '{}' is not supported for local transcription. Please select 'localWhisper' or 'parakeet'.",
+                "Provider '{}' is not supported for local transcription. Please select 'localWhisper', 'parakeet', or 'qwen3Asr'.",
                 other
             ))
         }
@@ -209,6 +234,32 @@ pub async fn get_or_init_transcription_engine<R: Runtime>(
                 }
                 None => {
                     Err("Parakeet engine not initialized. This should not happen after validation.".to_string())
+                }
+            }
+        }
+        "qwen3Asr" => {
+            info!("🎧 Initializing Qwen3-ASR transcription engine");
+
+            let engine = {
+                let guard = crate::qwen3_asr_engine::commands::QWEN3_ASR_ENGINE
+                    .lock()
+                    .unwrap();
+                guard.as_ref().cloned()
+            };
+
+            match engine {
+                Some(engine) => {
+                    if engine.is_model_loaded().await {
+                        let model_name = engine.get_current_model().await
+                            .unwrap_or_else(|| "unknown".to_string());
+                        info!("✅ Qwen3-ASR model '{}' already loaded", model_name);
+                        Ok(TranscriptionEngine::Qwen3Asr(engine))
+                    } else {
+                        Err("Qwen3-ASR engine initialized but no model loaded. This should not happen after validation.".to_string())
+                    }
+                }
+                None => {
+                    Err("Qwen3-ASR engine not initialized. This should not happen after validation.".to_string())
                 }
             }
         }

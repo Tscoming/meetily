@@ -11,6 +11,9 @@ pub const DEFAULT_WHISPER_MODEL: &str = "large-v3-turbo";
 /// This is the quantized version optimized for speed.
 pub const DEFAULT_PARAKEET_MODEL: &str = "parakeet-tdt-0.6b-v3-int8";
 
+/// Default Qwen3-ASR model for transcription when selected.
+pub const DEFAULT_QWEN3_ASR_MODEL: &str = "Qwen3-ASR-0.6B";
+
 /// Whisper model catalog with metadata for all supported models.
 /// Used by both WhisperEngine::discover_models() and discover_models_standalone().
 ///
