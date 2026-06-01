@@ -2,9 +2,8 @@
 
 import './globals.css'
 import { Source_Sans_3 } from 'next/font/google'
-import Sidebar from '@/components/Sidebar'
+import dynamic from 'next/dynamic'
 import { SidebarProvider } from '@/components/Sidebar/SidebarProvider'
-import MainContent from '@/components/MainContent'
 import AnalyticsProvider from '@/components/AnalyticsProvider'
 import { Toaster, toast } from 'sonner'
 import "sonner/dist/styles.css"
@@ -17,16 +16,31 @@ import { OllamaDownloadProvider } from '@/contexts/OllamaDownloadContext'
 import { TranscriptProvider } from '@/contexts/TranscriptContext'
 import { ConfigProvider, useConfig } from '@/contexts/ConfigContext'
 import { OnboardingProvider } from '@/contexts/OnboardingContext'
-import { OnboardingFlow } from '@/components/onboarding'
 import { loadBetaFeatures } from '@/types/betaFeatures'
-import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import { UpdateCheckProvider } from '@/components/UpdateCheckProvider'
 import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
-import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
 import { I18nProvider, translateUi } from '@/i18n'
 
+const Sidebar = dynamic(() => import('@/components/Sidebar'), { ssr: false })
+const MainContent = dynamic(() => import('@/components/MainContent'), { ssr: false })
+const OnboardingFlow = dynamic(
+  () => import('@/components/onboarding/OnboardingFlow').then((mod) => mod.OnboardingFlow),
+  { ssr: false }
+)
+const DownloadProgressToastProvider = dynamic(
+  () => import('@/components/shared/DownloadProgressToast').then((mod) => mod.DownloadProgressToastProvider),
+  { ssr: false }
+)
+const ImportAudioDialog = dynamic(
+  () => import('@/components/ImportAudio/ImportAudioDialog').then((mod) => mod.ImportAudioDialog),
+  { ssr: false }
+)
+const ImportDropOverlay = dynamic(
+  () => import('@/components/ImportAudio/ImportDropOverlay').then((mod) => mod.ImportDropOverlay),
+  { ssr: false }
+)
 
 const sourceSans3 = Source_Sans_3({
   subsets: ['latin'],
