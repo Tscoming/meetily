@@ -83,6 +83,24 @@ struct TranscriptionStatus {
     last_activity_ms: u64,
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct BuildInfo {
+    version: &'static str,
+    commit: &'static str,
+    dirty: bool,
+    build_version: &'static str,
+}
+
+#[tauri::command]
+fn get_build_info() -> BuildInfo {
+    BuildInfo {
+        version: env!("CARGO_PKG_VERSION"),
+        commit: env!("MEETILY_GIT_COMMIT_SHORT"),
+        dirty: env!("MEETILY_GIT_DIRTY") == "true",
+        build_version: env!("MEETILY_BUILD_VERSION"),
+    }
+}
+
 #[tauri::command]
 async fn start_recording<R: Runtime>(
     app: AppHandle<R>,
@@ -510,6 +528,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_build_info,
             start_recording,
             stop_recording,
             is_recording,

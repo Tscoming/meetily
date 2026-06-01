@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Info, Shield } from 'lucide-react';
 import { useI18n } from '@/i18n';
+import { getBuildVersion } from '@/lib/buildInfo';
 
 interface AnalyticsDataModalProps {
   isOpen: boolean;
@@ -12,6 +13,13 @@ interface AnalyticsDataModalProps {
 
 export default function AnalyticsDataModal({ isOpen, onClose, onConfirmDisable }: AnalyticsDataModalProps) {
   const { t } = useI18n();
+  const [buildVersion, setBuildVersion] = useState('current');
+
+  useEffect(() => {
+    if (isOpen) {
+      getBuildVersion().then(setBuildVersion).catch(console.error);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -125,7 +133,7 @@ export default function AnalyticsDataModal({ isOpen, onClose, onConfirmDisable }
             <pre className="text-xs text-gray-700 overflow-x-auto">
               {`{
   "event": "meeting_ended",
-  "app_version": "0.3.0",
+  "app_version": "${buildVersion}",
   "transcription_provider": "parakeet",
   "transcription_model": "parakeet-tdt-0.6b-v3-int8",
   "summary_provider": "ollama",

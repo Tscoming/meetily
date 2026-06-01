@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from '@tauri-apps/api/core';
-import { getVersion } from '@tauri-apps/api/app';
 import Image from 'next/image';
 import AnalyticsConsentSwitch from "./AnalyticsConsentSwitch";
 import { UpdateDialog } from "./UpdateDialog";
@@ -9,18 +8,18 @@ import { Button } from './ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/i18n';
+import { getBuildVersion } from '@/lib/buildInfo';
 
 
 export function About() {
     const { t } = useI18n();
-    const [currentVersion, setCurrentVersion] = useState<string>('0.3.0');
+    const [currentVersion, setCurrentVersion] = useState<string>('');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [isChecking, setIsChecking] = useState(false);
     const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 
     useEffect(() => {
-        // Get current version on mount
-        getVersion().then(setCurrentVersion).catch(console.error);
+        getBuildVersion().then(setCurrentVersion).catch(console.error);
     }, []);
 
     const handleContactClick = async () => {
@@ -63,7 +62,9 @@ export function About() {
                     />
                 </div>
                 {/* <h1 className="text-xl font-bold text-gray-900">Meetily</h1> */}
-                <span className="text-sm text-gray-500"> v{currentVersion}</span>
+                {currentVersion && (
+                    <span className="text-sm text-gray-500"> v{currentVersion}</span>
+                )}
                 <p className="text-medium text-gray-600 mt-1">
                     {t('about.tagline')}
                 </p>

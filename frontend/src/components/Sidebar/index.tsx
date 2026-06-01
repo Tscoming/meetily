@@ -22,6 +22,7 @@ import { useRecordingState } from '@/contexts/RecordingStateContext';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useI18n } from '@/i18n';
+import { getBuildVersion } from '@/lib/buildInfo';
 
 import {
   Dialog,
@@ -85,6 +86,7 @@ const Sidebar: React.FC = () => {
   });
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState<boolean | null>(null);
   const [isResizing, setIsResizing] = useState(false);
+  const [buildVersion, setBuildVersion] = useState('');
 
   // State for edit modal
   const [editModalState, setEditModalState] = useState<{ isOpen: boolean; meetingId: string | null; currentTitle: string }>({
@@ -92,6 +94,10 @@ const Sidebar: React.FC = () => {
     meetingId: null,
     currentTitle: ''
   });
+
+  useEffect(() => {
+    getBuildVersion().then(setBuildVersion).catch(console.error);
+  }, []);
   const [editingTitle, setEditingTitle] = useState<string>('');
 
   // Ensure 'meetings' folder is always expanded
@@ -848,9 +854,11 @@ const Sidebar: React.FC = () => {
               <span>{t('sidebar.settings')}</span>
             </button>
             <Info isCollapsed={isCollapsed} />
-            <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
-              v0.3.0
-            </div>
+            {buildVersion && (
+              <div className="w-full flex items-center justify-center px-3 py-1 text-xs text-gray-400">
+                v{buildVersion}
+              </div>
+            )}
           </div>
         )}
       </div>

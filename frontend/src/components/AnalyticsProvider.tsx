@@ -3,6 +3,7 @@
 import React, { useEffect, ReactNode, useRef, useState, createContext } from 'react';
 import Analytics from '@/lib/analytics';
 import { load } from '@tauri-apps/plugin-store';
+import { getBuildVersion } from '@/lib/buildInfo';
 
 
 interface AnalyticsProviderProps {
@@ -61,6 +62,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
 
       // Get device info for initialization
       const deviceInfo = await Analytics.getDeviceInfo();
+      const buildVersion = await getBuildVersion();
 
       // Store platform info in analytics.json for quick access
       const store = await load('analytics.json', {
@@ -82,7 +84,7 @@ export default function AnalyticsProvider({ children }: AnalyticsProviderProps) 
 
       // Identify user with enhanced properties immediately after init
       await Analytics.identify(userId, {
-        app_version: '0.3.0',
+        app_version: buildVersion,
         platform: deviceInfo.platform,
         os_version: deviceInfo.os_version,
         architecture: deviceInfo.architecture,

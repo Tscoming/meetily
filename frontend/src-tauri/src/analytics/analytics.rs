@@ -116,7 +116,7 @@ impl AnalyticsClient {
         let mut properties = properties.unwrap_or_default();
 
         // Add app version to all events
-        properties.insert("app_version".to_string(), env!("CARGO_PKG_VERSION").to_string());
+        properties.insert("app_version".to_string(), env!("MEETILY_BUILD_VERSION").to_string());
 
         // Add session information to all events
         if let Some(session) = self.current_session.lock().await.as_ref() {
@@ -193,7 +193,7 @@ impl AnalyticsClient {
     pub async fn track_user_first_launch(&self) -> Result<(), String> {
         let mut properties = HashMap::new();
         properties.insert("timestamp".to_string(), Utc::now().to_rfc3339());
-        properties.insert("app_version".to_string(), env!("CARGO_PKG_VERSION").to_string());
+        properties.insert("app_version".to_string(), env!("MEETILY_BUILD_VERSION").to_string());
         
         self.track_event("user_first_launch", Some(properties)).await
     }

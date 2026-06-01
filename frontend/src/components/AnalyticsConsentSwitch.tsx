@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Analytics } from '@/lib/analytics';
 import AnalyticsDataModal from './AnalyticsDataModal';
 import { useI18n } from '@/i18n';
+import { getBuildVersion } from '@/lib/buildInfo';
 
 
 export default function AnalyticsConsentSwitch() {
@@ -91,10 +92,11 @@ export default function AnalyticsConsentSwitch() {
 
         // Initialize analytics
         await Analytics.init();
+        const buildVersion = await getBuildVersion();
 
         // Identify user with enhanced properties immediately after init
         await Analytics.identify(userId, {
-          app_version: '0.3.0',
+          app_version: buildVersion,
           platform: 'tauri',
           first_seen: new Date().toISOString(),
           os: navigator.platform,
