@@ -55,13 +55,13 @@ export function About() {
                 <div className="mb-3">
                     <Image
                         src="icon_128x128.png"
-                        alt="Meetily Logo"
+                        alt="MeetVoice Logo"
                         width={64}
                         height={64}
                         className="mx-auto"
                     />
                 </div>
-                {/* <h1 className="text-xl font-bold text-gray-900">Meetily</h1> */}
+                <h1 className="text-xl font-bold text-gray-900">MeetVoice</h1>
                 {currentVersion && (
                     <span className="text-sm text-gray-500"> v{currentVersion}</span>
                 )}

@@ -91,7 +91,7 @@ fn git_worktree_dirty() -> bool {
 fn detect_and_report_gpu_capabilities() {
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
 
-    println!("cargo:warning=🚀 Building Meetily for: {}", target_os);
+    println!("cargo:warning=🚀 Building MeetVoice for: {}", target_os);
 
     match target_os.as_str() {
         "macos" => {

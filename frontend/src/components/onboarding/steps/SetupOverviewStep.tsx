@@ -63,7 +63,7 @@ export function SetupOverviewStep() {
   return (
     <OnboardingContainer
       title="Setup Overview"
-      description="Meetily requires that you download the Transcription & Summarization AI models for the software to work."
+      description="MeetVoice requires the local transcription and summarization AI models before it can create meeting notes."
       step={2}
       totalSteps={isMac ? 4 : 3}
     >

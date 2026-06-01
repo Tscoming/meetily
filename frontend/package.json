@@ -1,5 +1,5 @@
 {
-    "name": "meetily",
+    "name": "meetvoice",
     "version": "0.3.33",
     "private": true,
     "main": "electron/main.js",

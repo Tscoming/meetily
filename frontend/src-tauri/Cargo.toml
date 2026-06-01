@@ -1,7 +1,7 @@
 [package]
 name = "meetily"
 version = "0.3.33"
-description = "A Tauri App for meeting minutes"
+description = "Local AI Meeting Notes"
 authors = ["Sujith S"]
 license = "MIT"
 repository = "https://github.com/Zackriya-Solutions/meeting-minutes"

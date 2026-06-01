@@ -64,7 +64,7 @@ function main() {
   writeJsonVersion(tauriConfigPath, version);
   writeCargoVersion(cargoTomlPath, version);
 
-  console.log(`Synced Meetily version to ${version}`);
+  console.log(`Synced MeetVoice version to ${version}`);
 }
 
 main();
