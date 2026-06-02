@@ -22,6 +22,12 @@ echo "Cleaning up previous builds..."
 #rm -rf src-tauri/target
 #rm -rf src-tauri/gen
 
+echo "Stopping existing Next.js dev server on port 3118..."
+NEXT_PIDS=$(lsof -ti tcp:3118 || true)
+if [ -n "$NEXT_PIDS" ]; then
+    kill $NEXT_PIDS || true
+fi
+
 # Clean up npm, pnp and next
 echo "Cleaning up npm, pnp and next..."
 rm -rf node_modules
@@ -32,14 +38,9 @@ rm -rf out
 echo "Installing dependencies..."
 pnpm install
 
-# Build the Next.js application first
-echo "Building Next.js application..."
-pnpm run build
-
 # Set environment variables for the build
 echo "Setting up build environment..."
 
 echo "Building Tauri app..."
 pnpm run tauri dev
 sleep
-
