@@ -41,6 +41,10 @@ const ImportDropOverlay = dynamic(
   () => import('@/components/ImportAudio/ImportDropOverlay').then((mod) => mod.ImportDropOverlay),
   { ssr: false }
 )
+const ModelStatusBar = dynamic(
+  () => import('@/components/ModelStatusBar').then((mod) => mod.ModelStatusBar),
+  { ssr: false }
+)
 
 const sourceSans3 = Source_Sans_3({
   subsets: ['latin'],
@@ -270,6 +274,7 @@ export default function RootLayout({
                                   <div className="flex">
                                     <Sidebar />
                                     <MainContent>{children}</MainContent>
+                                    <ModelStatusBar />
                                   </div>
                                 )}
                                 {/* Import audio overlay and dialog */}

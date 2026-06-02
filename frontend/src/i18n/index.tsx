@@ -76,6 +76,9 @@ type TranslationKey =
   | 'audioBackend.systemOnly'
   | 'audioBackend.microphoneDefault'
   | 'audioBackend.newSessions'
+  | 'statusBar.transcriptionModel'
+  | 'statusBar.summaryModel'
+  | 'statusBar.notConfigured'
   | 'transcript.model'
   | 'transcript.selectProvider'
   | 'transcript.selectModel'
@@ -580,6 +583,9 @@ const translations: Record<UiLocale, Record<TranslationKey, string>> = {
     'audioBackend.systemOnly': 'Backend selection only affects system audio capture',
     'audioBackend.microphoneDefault': 'Microphone always uses the default method',
     'audioBackend.newSessions': 'Changes apply to new recording sessions',
+    'statusBar.transcriptionModel': 'Transcription',
+    'statusBar.summaryModel': 'Summary',
+    'statusBar.notConfigured': 'Not configured',
     'transcript.model': 'Transcript Model',
     'transcript.selectProvider': 'Select provider',
     'transcript.selectModel': 'Select model',
@@ -1075,6 +1081,9 @@ const translations: Record<UiLocale, Record<TranslationKey, string>> = {
     'audioBackend.systemOnly': '后端选择只影响系统音频捕获',
     'audioBackend.microphoneDefault': '麦克风始终使用默认方式',
     'audioBackend.newSessions': '更改会在新的录音会话中生效',
+    'statusBar.transcriptionModel': '转写模型',
+    'statusBar.summaryModel': '摘要模型',
+    'statusBar.notConfigured': '未配置',
     'transcript.model': '转写模型',
     'transcript.selectProvider': '选择提供方',
     'transcript.selectModel': '选择模型',

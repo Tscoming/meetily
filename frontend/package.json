@@ -1,6 +1,6 @@
 {
     "name": "meetvoice",
-    "version": "0.3.33",
+    "version": "0.1.0",
     "private": true,
     "main": "electron/main.js",
     "scripts": {
