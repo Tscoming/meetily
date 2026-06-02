@@ -9,7 +9,55 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useI18n } from '@/i18n';
 
-const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
+const TRANSCRIPTION_MODEL_INFO: Record<string, { label: string; sizeMb: number; sizeLabel: string }> = {
+  'parakeet-tdt-0.6b-v3-int8': {
+    label: 'Parakeet TDT 0.6B v3 Int8',
+    sizeMb: 670,
+    sizeLabel: '~670 MB',
+  },
+  'parakeet-tdt-0.6b-v2-int8': {
+    label: 'Parakeet TDT 0.6B v2 Int8',
+    sizeMb: 661,
+    sizeLabel: '~661 MB',
+  },
+  'Qwen3-ASR-0.6B': {
+    label: 'Qwen3-ASR 0.6B',
+    sizeMb: 1900,
+    sizeLabel: '~1.9 GB',
+  },
+  'Qwen3-ASR-1.7B': {
+    label: 'Qwen3-ASR 1.7B',
+    sizeMb: 4700,
+    sizeLabel: '~4.7 GB',
+  },
+};
+
+const SUMMARY_MODEL_INFO: Record<string, { label: string; sizeMb: number; sizeLabel: string }> = {
+  'gemma3:1b': {
+    label: 'Gemma 3 1B',
+    sizeMb: 1019,
+    sizeLabel: '~1.0 GB',
+  },
+  'gemma3:4b': {
+    label: 'Gemma 3 4B',
+    sizeMb: 2374,
+    sizeLabel: '~2.4 GB',
+  },
+  'qwen3:1.7b': {
+    label: 'Qwen3 1.7B',
+    sizeMb: 1056,
+    sizeLabel: '~1.0 GB',
+  },
+  'qwen3:4b': {
+    label: 'Qwen3 4B',
+    sizeMb: 2382,
+    sizeLabel: '~2.4 GB',
+  },
+};
+
+function getTranscriptionProvider(modelName: string): 'parakeet' | 'qwen3Asr' {
+  return modelName.startsWith('Qwen3-ASR') ? 'qwen3Asr' : 'parakeet';
+}
 
 type DownloadStatus = 'waiting' | 'downloading' | 'completed' | 'error';
 
@@ -26,8 +74,8 @@ export function DownloadProgressStep() {
   const { t } = useI18n();
   const {
     goNext,
+    selectedTranscriptionModel,
     selectedSummaryModel,
-    setSelectedSummaryModel,
     parakeetDownloaded,
     setParakeetDownloaded,
     summaryModelDownloaded,
@@ -36,14 +84,13 @@ export function DownloadProgressStep() {
     completeOnboarding,
   } = useOnboarding();
 
-  const [recommendedModel, setRecommendedModel] = useState<string>('gemma3:1b');
   const [isMac, setIsMac] = useState(false);
 
   const [parakeetState, setParakeetState] = useState<DownloadState>({
     status: parakeetDownloaded ? 'completed' : 'waiting',
     progress: parakeetDownloaded ? 100 : 0,
     downloadedMb: 0,
-    totalMb: 670,
+    totalMb: TRANSCRIPTION_MODEL_INFO[selectedTranscriptionModel]?.sizeMb ?? 670,
     speedMbps: 0,
   });
 
@@ -51,7 +98,7 @@ export function DownloadProgressStep() {
     status: summaryModelDownloaded ? 'completed' : 'waiting',
     progress: summaryModelDownloaded ? 100 : 0,
     downloadedMb: 0,
-    totalMb: 806, // 1b model size
+    totalMb: SUMMARY_MODEL_INFO[selectedSummaryModel]?.sizeMb ?? 1019,
     speedMbps: 0,
   });
 
@@ -82,7 +129,12 @@ export function DownloadProgressStep() {
     }));
 
     try {
-      await invoke('parakeet_retry_download', { modelName: PARAKEET_MODEL });
+      if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr') {
+        await invoke('qwen3_asr_init');
+        await invoke('qwen3_asr_download_model', { modelName: selectedTranscriptionModel });
+      } else {
+        await invoke('parakeet_retry_download', { modelName: selectedTranscriptionModel });
+      }
       // Progress events will update state
     } catch (error) {
       console.error('[DownloadProgressStep] Retry failed:', error);
@@ -126,7 +178,7 @@ export function DownloadProgressStep() {
 
     try {
       // Call download command directly (no retry command exists for built-in AI)
-      await invoke('builtin_ai_download_model', { modelName: selectedSummaryModel || recommendedModel });
+      await invoke('builtin_ai_download_model', { modelName: selectedSummaryModel });
     } catch (error) {
       console.error('[DownloadProgressStep] Summary retry failed:', error);
       setGemmaState((prev) => ({
@@ -146,19 +198,8 @@ export function DownloadProgressStep() {
     }
   };
 
-  // Fetch recommended model and detect platform on mount
+  // Detect platform on mount
   useEffect(() => {
-    const fetchRecommendation = async () => {
-      try {
-        const model = await invoke<string>('builtin_ai_get_recommended_model');
-        setRecommendedModel(model);
-        setSelectedSummaryModel(model);  // Update context
-      } catch (error) {
-        console.error('Failed to get recommended model:', error);
-        // Keep default gemma3:1b
-      }
-    };
-
     const checkPlatform = async () => {
       try {
         const { platform } = await import('@tauri-apps/plugin-os');
@@ -168,7 +209,6 @@ export function DownloadProgressStep() {
       }
     };
 
-    fetchRecommendation();
     checkPlatform();
   }, []);
 
@@ -191,7 +231,7 @@ export function DownloadProgressStep() {
       status?: string;
     }>('parakeet-model-download-progress', (event) => {
       const { modelName, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
-      if (modelName === PARAKEET_MODEL) {
+      if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && modelName === selectedTranscriptionModel) {
         setParakeetState((prev) => ({
           ...prev,
           status: status === 'completed' ? 'completed' : 'downloading',
@@ -210,7 +250,7 @@ export function DownloadProgressStep() {
     const unlistenComplete = listen<{ modelName: string }>(
       'parakeet-model-download-complete',
       (event) => {
-        if (event.payload.modelName === PARAKEET_MODEL) {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && event.payload.modelName === selectedTranscriptionModel) {
           setParakeetState((prev) => ({ ...prev, status: 'completed', progress: 100 }));
           setParakeetDownloaded(true);
         }
@@ -220,7 +260,7 @@ export function DownloadProgressStep() {
     const unlistenError = listen<{ modelName: string; error: string }>(
       'parakeet-model-download-error',
       (event) => {
-        if (event.payload.modelName === PARAKEET_MODEL) {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && event.payload.modelName === selectedTranscriptionModel) {
           setParakeetState((prev) => ({
             ...prev,
             status: 'error',
@@ -235,7 +275,64 @@ export function DownloadProgressStep() {
       unlistenComplete.then((fn) => fn());
       unlistenError.then((fn) => fn());
     };
-  }, []);
+  }, [selectedTranscriptionModel]);
+
+  // Listen to Qwen3-ASR download progress
+  useEffect(() => {
+    const unlistenProgress = listen<{
+      modelName: string;
+      progress: number;
+      downloaded_mb?: number;
+      total_mb?: number;
+      speed_mbps?: number;
+      status?: string;
+    }>('qwen3-asr-model-download-progress', (event) => {
+      const { modelName, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+      if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && modelName === selectedTranscriptionModel) {
+        setParakeetState((prev) => ({
+          ...prev,
+          status: status === 'completed' ? 'completed' : 'downloading',
+          progress,
+          downloadedMb: downloaded_mb ?? prev.downloadedMb,
+          totalMb: total_mb ?? prev.totalMb,
+          speedMbps: speed_mbps ?? prev.speedMbps,
+        }));
+
+        if (status === 'completed' || progress >= 100) {
+          setParakeetDownloaded(true);
+        }
+      }
+    });
+
+    const unlistenComplete = listen<{ modelName: string }>(
+      'qwen3-asr-model-download-complete',
+      (event) => {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && event.payload.modelName === selectedTranscriptionModel) {
+          setParakeetState((prev) => ({ ...prev, status: 'completed', progress: 100 }));
+          setParakeetDownloaded(true);
+        }
+      }
+    );
+
+    const unlistenError = listen<{ modelName: string; error: string }>(
+      'qwen3-asr-model-download-error',
+      (event) => {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && event.payload.modelName === selectedTranscriptionModel) {
+          setParakeetState((prev) => ({
+            ...prev,
+            status: 'error',
+            error: event.payload.error,
+          }));
+        }
+      }
+    );
+
+    return () => {
+      unlistenProgress.then((fn) => fn());
+      unlistenComplete.then((fn) => fn());
+      unlistenError.then((fn) => fn());
+    };
+  }, [selectedTranscriptionModel]);
 
   // Listen to Gemma download progress (always downloading for builtin-ai)
   useEffect(() => {
@@ -249,7 +346,7 @@ export function DownloadProgressStep() {
       error?: string;
     }>('builtin-ai-download-progress', (event) => {
       const { model, progress, downloaded_mb, total_mb, speed_mbps, status, error } = event.payload;
-      if (model === selectedSummaryModel || model === 'gemma3:1b' || model === 'gemma3:4b') {
+      if (model === selectedSummaryModel) {
         setGemmaState((prev) => ({
           ...prev,
           status: status === 'completed'
@@ -298,8 +395,20 @@ export function DownloadProgressStep() {
   const handleContinue = async () => {
     // Verify actual model availability (catches state drift)
     try {
-      await invoke('parakeet_init');
-      const actuallyAvailable = await invoke<boolean>('parakeet_has_available_models');
+      const transcriptionProvider = getTranscriptionProvider(selectedTranscriptionModel);
+      if (transcriptionProvider === 'qwen3Asr') {
+        await invoke('qwen3_asr_init');
+      } else {
+        await invoke('parakeet_init');
+      }
+      const models = await invoke<any[]>(
+        transcriptionProvider === 'qwen3Asr'
+          ? 'qwen3_asr_get_available_models'
+          : 'parakeet_get_available_models'
+      );
+      const selectedModel = models.find((model) => model.name === selectedTranscriptionModel);
+      const status = selectedModel?.status;
+      const actuallyAvailable = status === 'Available';
 
       if (actuallyAvailable && !parakeetDownloaded) {
         console.log('[DownloadProgressStep] Model available but state not updated');
@@ -451,14 +560,14 @@ export function DownloadProgressStep() {
             'Transcription Engine',
             <Mic className="w-5 h-5 text-gray-600" />,
             parakeetState,
-            '~670 MB'
+            `${TRANSCRIPTION_MODEL_INFO[selectedTranscriptionModel]?.label ?? selectedTranscriptionModel} • ${TRANSCRIPTION_MODEL_INFO[selectedTranscriptionModel]?.sizeLabel ?? '~670 MB'}`
           )}
 
           {renderDownloadCard(
             'Summary Engine',
             <Sparkles className="w-5 h-5 text-gray-600" />,
             gemmaState,
-            recommendedModel === 'gemma3:4b' ? '~2.5 GB' : '~806 MB'
+            `${SUMMARY_MODEL_INFO[selectedSummaryModel]?.label ?? selectedSummaryModel} • ${SUMMARY_MODEL_INFO[selectedSummaryModel]?.sizeLabel ?? '~1.0 GB'}`
           )}
         </div>
 

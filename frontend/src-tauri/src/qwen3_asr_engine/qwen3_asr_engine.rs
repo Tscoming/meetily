@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use futures_util::{future::join_all, StreamExt};
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -13,7 +13,7 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
-const HUGGINGFACE_BASE_URLS: &[&str] = &["https://huggingface.co", "https://hf-mirror.com"];
+use crate::huggingface::{endpoint_plan_for_repo, resolve_file_url};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ModelStatus {
@@ -68,17 +68,6 @@ pub struct ModelInfo {
     pub speed: String,
     pub status: ModelStatus,
     pub description: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct HuggingFaceModelInfo {
-    siblings: Vec<HuggingFaceSibling>,
-}
-
-#[derive(Debug, Deserialize)]
-struct HuggingFaceSibling {
-    rfilename: String,
-    size: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -298,10 +287,20 @@ impl Qwen3AsrEngine {
             .connect_timeout(Duration::from_secs(30))
             .build()?;
 
-        let (selected_base_url, hf_model) =
-            fetch_model_info_with_best_endpoint(&client, config.repo_id).await?;
+        let initial_plan =
+            endpoint_plan_for_repo(&client, config.repo_id, None, "Qwen3-ASR").await?;
+        let probe_file_path = initial_plan
+            .model_info
+            .siblings
+            .iter()
+            .filter(|file| !file.rfilename.ends_with(".md"))
+            .max_by_key(|file| file.size.unwrap_or(0))
+            .map(|file| file.rfilename.as_str());
+        let endpoint_plan =
+            endpoint_plan_for_repo(&client, config.repo_id, probe_file_path, "Qwen3-ASR").await?;
 
-        let files: Vec<_> = hf_model
+        let files: Vec<_> = endpoint_plan
+            .model_info
             .siblings
             .into_iter()
             .filter(|file| !file.rfilename.ends_with(".md"))
@@ -333,28 +332,28 @@ impl Qwen3AsrEngine {
                 return Err(anyhow!("Download cancelled"));
             }
 
-            let mut response = None;
             let mut last_error = None;
+            let mut file_completed = false;
+            let file_path = model_dir.join(&file.rfilename);
+            if let Some(parent) = file_path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
 
-            for base_url in ordered_huggingface_base_urls(&selected_base_url) {
-                let file_url = format!(
-                    "{}/{}/resolve/main/{}",
-                    base_url, config.repo_id, file.rfilename
-                );
+            for base_url in &endpoint_plan.base_urls {
+                let existing_size = if file_path.exists() {
+                    fs::metadata(&file_path).await.map(|m| m.len()).unwrap_or(0)
+                } else {
+                    0
+                };
+                let file_url = resolve_file_url(base_url, config.repo_id, "main", &file.rfilename);
+                let mut request = client.get(&file_url);
+                if existing_size > 0 {
+                    request = request.header("Range", format!("bytes={}-", existing_size));
+                }
 
-                match client.get(&file_url).send().await {
+                let response = match request.send().await {
                     Ok(resp) => match resp.error_for_status() {
-                        Ok(resp) => {
-                            if base_url != selected_base_url {
-                                log::info!(
-                                    "Qwen3-ASR download switched to fallback endpoint {} for {}",
-                                    base_url,
-                                    file.rfilename
-                                );
-                            }
-                            response = Some(resp);
-                            break;
-                        }
+                        Ok(resp) => resp,
                         Err(e) => {
                             last_error = Some(e.to_string());
                             log::warn!(
@@ -363,6 +362,7 @@ impl Qwen3AsrEngine {
                                 file.rfilename,
                                 e
                             );
+                            continue;
                         }
                     },
                     Err(e) => {
@@ -373,54 +373,109 @@ impl Qwen3AsrEngine {
                             file.rfilename,
                             e
                         );
+                        continue;
                     }
+                };
+
+                if base_url != &endpoint_plan.base_urls[0] {
+                    log::info!(
+                        "Qwen3-ASR download switched to fallback endpoint {} for {}",
+                        base_url,
+                        file.rfilename
+                    );
+                }
+
+                let is_resuming = response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+                if existing_size > 0 && !is_resuming {
+                    downloaded_bytes = downloaded_bytes.saturating_sub(existing_size);
+                    log::warn!(
+                        "Qwen3-ASR endpoint {} does not support resume for {}, restarting file",
+                        base_url,
+                        file.rfilename
+                    );
+                }
+
+                let output = if is_resuming {
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .append(true)
+                        .open(&file_path)
+                        .await?
+                } else {
+                    fs::File::create(&file_path).await?
+                };
+                let mut writer = BufWriter::new(output);
+                let mut stream = response.bytes_stream();
+
+                loop {
+                    if self.cancel_download_flag.read().await.as_deref() == Some(model_name) {
+                        return Err(anyhow!("Download cancelled"));
+                    }
+
+                    let next_chunk = timeout(Duration::from_secs(30), stream.next()).await;
+                    let chunk = match next_chunk {
+                        Err(_) => {
+                            let error = "no data received for 30 seconds".to_string();
+                            last_error = Some(error.clone());
+                            log::warn!(
+                                "Qwen3-ASR download endpoint {} stalled for {}: {}",
+                                base_url,
+                                file.rfilename,
+                                error
+                            );
+                            break;
+                        }
+                        Ok(None) => {
+                            file_completed = true;
+                            break;
+                        }
+                        Ok(Some(Ok(chunk))) => chunk,
+                        Ok(Some(Err(e))) => {
+                            last_error = Some(e.to_string());
+                            log::warn!(
+                                "Qwen3-ASR download stream failed from {} for {}: {}",
+                                base_url,
+                                file.rfilename,
+                                e
+                            );
+                            break;
+                        }
+                    };
+
+                    writer.write_all(&chunk).await?;
+                    downloaded_bytes += chunk.len() as u64;
+
+                    if let Some(callback) = progress_callback.as_ref() {
+                        let elapsed = start.elapsed().as_secs_f64().max(0.1);
+                        let progress = DownloadProgress::new(
+                            downloaded_bytes,
+                            total_bytes,
+                            downloaded_bytes as f64 / 1_048_576.0 / elapsed,
+                        );
+
+                        if (progress.percent - last_percent).abs() >= 0.1
+                            || last_report.elapsed() >= Duration::from_millis(300)
+                        {
+                            last_percent = progress.percent;
+                            last_report = Instant::now();
+                            callback(progress);
+                        }
+                    }
+                }
+
+                writer.flush().await?;
+                if file_completed {
+                    break;
                 }
             }
 
-            let response = response.ok_or_else(|| {
-                anyhow!(
+            if !file_completed {
+                return Err(anyhow!(
                     "Failed to download {} from Hugging Face endpoints: {}",
                     file.rfilename,
                     last_error.unwrap_or_else(|| "unknown error".to_string())
-                )
-            })?;
-            let file_path = model_dir.join(&file.rfilename);
-            if let Some(parent) = file_path.parent() {
-                fs::create_dir_all(parent).await?;
+                ));
             }
-
-            let mut stream = response.bytes_stream();
-            let file = fs::File::create(&file_path).await?;
-            let mut writer = BufWriter::new(file);
-
-            while let Some(chunk) = stream.next().await {
-                if self.cancel_download_flag.read().await.as_deref() == Some(model_name) {
-                    return Err(anyhow!("Download cancelled"));
-                }
-
-                let chunk = chunk?;
-                writer.write_all(&chunk).await?;
-                downloaded_bytes += chunk.len() as u64;
-
-                if let Some(callback) = progress_callback.as_ref() {
-                    let elapsed = start.elapsed().as_secs_f64().max(0.1);
-                    let progress = DownloadProgress::new(
-                        downloaded_bytes,
-                        total_bytes,
-                        downloaded_bytes as f64 / 1_048_576.0 / elapsed,
-                    );
-
-                    if (progress.percent - last_percent).abs() >= 0.1
-                        || last_report.elapsed() >= Duration::from_millis(300)
-                    {
-                        last_percent = progress.percent;
-                        last_report = Instant::now();
-                        callback(progress);
-                    }
-                }
-            }
-
-            writer.flush().await?;
         }
 
         if !self.is_valid_model_dir(&model_dir).await {
@@ -529,100 +584,6 @@ print(json.dumps({"text": result[0].text}, ensure_ascii=False))
     }
 }
 
-async fn fetch_model_info_with_best_endpoint(
-    client: &reqwest::Client,
-    repo_id: &str,
-) -> Result<(String, HuggingFaceModelInfo)> {
-    log::info!(
-        "Qwen3-ASR probing download endpoints for {}: {:?}",
-        repo_id,
-        HUGGINGFACE_BASE_URLS
-    );
-
-    let probes = HUGGINGFACE_BASE_URLS.iter().map(|base_url| {
-        fetch_model_info_from_endpoint(client.clone(), (*base_url).to_string(), repo_id.to_string())
-    });
-
-    let probe_results = join_all(probes).await;
-    let mut successful = Vec::new();
-
-    for result in probe_results {
-        match result {
-            Ok((base_url, model_info, elapsed)) => {
-                log::info!(
-                    "Qwen3-ASR endpoint probe ok: {} latency={}ms reason=metadata_api_reachable",
-                    base_url,
-                    elapsed.as_millis()
-                );
-                successful.push((base_url, model_info, elapsed));
-            }
-            Err(probe_error) => {
-                log::warn!(
-                    "Qwen3-ASR endpoint probe failed: reason={}",
-                    probe_error
-                );
-            }
-        }
-    }
-
-    successful.sort_by_key(|(_, _, elapsed)| *elapsed);
-
-    if let Some((base_url, model_info, elapsed)) = successful.into_iter().next() {
-        log::info!(
-            "Qwen3-ASR selected download endpoint: {} latency={}ms reason=fastest_successful_metadata_probe",
-            base_url,
-            elapsed.as_millis()
-        );
-        Ok((base_url, model_info))
-    } else {
-        Err(anyhow!(
-            "Failed to reach Hugging Face or China mirror for model metadata"
-        ))
-    }
-}
-
-async fn fetch_model_info_from_endpoint(
-    client: reqwest::Client,
-    base_url: String,
-    repo_id: String,
-) -> Result<(String, HuggingFaceModelInfo, Duration)> {
-    let started = Instant::now();
-    let api_url = format!("{}/api/models/{}", base_url, repo_id);
-
-    let model_info = timeout(Duration::from_secs(8), async {
-        client
-            .get(api_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<HuggingFaceModelInfo>()
-            .await
-    })
-    .await
-    .map_err(|_| anyhow!("endpoint={} error=timeout_after_8s", base_url))?
-    .map_err(|e| anyhow!("endpoint={} error={}", base_url, e))?;
-
-    Ok((base_url, model_info, started.elapsed()))
-}
-
-fn ordered_huggingface_base_urls(preferred_base_url: &str) -> Vec<&'static str> {
-    let mut urls = Vec::with_capacity(HUGGINGFACE_BASE_URLS.len());
-
-    for base_url in HUGGINGFACE_BASE_URLS {
-        if *base_url == preferred_base_url {
-            urls.push(*base_url);
-        }
-    }
-
-    for base_url in HUGGINGFACE_BASE_URLS {
-        if *base_url != preferred_base_url {
-            urls.push(*base_url);
-        }
-    }
-
-    urls
-}
-
 fn directory_size(path: &Path) -> Result<u64> {
     let mut size = 0;
     for entry in std::fs::read_dir(path)? {
@@ -640,7 +601,11 @@ fn directory_size(path: &Path) -> Result<u64> {
 fn find_python_binary() -> Option<PathBuf> {
     if let Ok(current_dir) = std::env::current_dir() {
         for ancestor in current_dir.ancestors() {
-            let venv_python = ancestor.join("backend").join("venv").join("bin").join("python");
+            let venv_python = ancestor
+                .join("backend")
+                .join("venv")
+                .join("bin")
+                .join("python");
             if venv_python.exists() {
                 return Some(venv_python);
             }

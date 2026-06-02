@@ -73,8 +73,8 @@ pub fn get_available_models() -> Vec<ModelDef> {
             template: "gemma3".to_string(),
             download_url: "https://meetily.towardsgeneralintelligence.com/models/gemma-3-1b-it-Q8_0.gguf".to_string(),
             size_mb: 1019,
-            context_size: 32768, 
-            layer_count: 26,     
+            context_size: 32768,
+            layer_count: 26,
             sampling: SamplingParams {
                 temperature: 1.0,
                 top_k: 64,
@@ -100,6 +100,40 @@ pub fn get_available_models() -> Vec<ModelDef> {
             },
             description: "Balanced model. Great quality/speed trade-off. Requires ~3.5GB RAM.".to_string(),
         },
+        ModelDef {
+            name: "qwen3:1.7b".to_string(),
+            display_name: "Qwen3 1.7B (Compact)".to_string(),
+            gguf_file: "Qwen3_1.7B.Q4_K_M.gguf".to_string(),
+            template: "qwen3".to_string(),
+            download_url: "https://huggingface.co/prithivMLmods/Qwen3-1.7B-GGUF/resolve/main/Qwen3_1.7B.Q4_K_M.gguf".to_string(),
+            size_mb: 1056,
+            context_size: 32768,
+            layer_count: 28,
+            sampling: SamplingParams {
+                temperature: 0.7,
+                top_k: 20,
+                top_p: 0.8,
+                stop_tokens: vec!["<|im_end|>".to_string()],
+            },
+            description: "Compact Qwen3 model. Good multilingual summary quality with modest local resource use.".to_string(),
+        },
+        ModelDef {
+            name: "qwen3:4b".to_string(),
+            display_name: "Qwen3 4B (Balanced)".to_string(),
+            gguf_file: "Qwen3-4B-Q4_K_M.gguf".to_string(),
+            template: "qwen3".to_string(),
+            download_url: "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf".to_string(),
+            size_mb: 2382,
+            context_size: 32768,
+            layer_count: 36,
+            sampling: SamplingParams {
+                temperature: 0.7,
+                top_k: 20,
+                top_p: 0.8,
+                stop_tokens: vec!["<|im_end|>".to_string()],
+            },
+            description: "Balanced Qwen3 model. Strong multilingual summaries with a larger local download.".to_string(),
+        },
     ]
 }
 
@@ -118,8 +152,8 @@ pub fn get_default_model() -> ModelDef {
 
 /// Resolve model name to full file path in the models directory
 pub fn get_model_path(app_data_dir: &PathBuf, model_name: &str) -> Result<PathBuf> {
-    let model = get_model_by_name(model_name)
-        .ok_or_else(|| anyhow!("Unknown model: {}", model_name))?;
+    let model =
+        get_model_by_name(model_name).ok_or_else(|| anyhow!("Unknown model: {}", model_name))?;
 
     let models_dir = get_models_directory(app_data_dir);
     let model_path = models_dir.join(&model.gguf_file);
@@ -145,6 +179,17 @@ pub const GEMMA3_TEMPLATE: &str = "\
 <start_of_turn>model
 ";
 
+/// Qwen3 chat template format.
+pub const QWEN3_TEMPLATE: &str = "\
+<|im_start|>system
+{system_prompt}
+Do not use thinking mode. Do not output hidden reasoning.<|im_end|>
+<|im_start|>user
+{user_prompt}
+/no_think<|im_end|>
+<|im_start|>assistant
+";
+
 /// Format a prompt using the specified template
 ///
 /// # Arguments
@@ -161,6 +206,7 @@ pub fn format_prompt(
 ) -> Result<String> {
     let template = match template_name {
         "gemma3" => GEMMA3_TEMPLATE,
+        "qwen3" => QWEN3_TEMPLATE,
         _ => return Err(anyhow!("Unknown template: {}", template_name)),
     };
 

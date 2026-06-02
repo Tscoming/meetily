@@ -7,6 +7,10 @@ import type { PermissionStatus, OnboardingPermissions } from '@/types/onboarding
 
 const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
+function getTranscriptionProvider(modelName: string): 'parakeet' | 'qwen3Asr' {
+  return modelName.startsWith('Qwen3-ASR') ? 'qwen3Asr' : 'parakeet';
+}
+
 interface OnboardingStatus {
   version: string;
   completed: boolean;
@@ -40,6 +44,7 @@ interface OnboardingContextType {
   summaryModelDownloaded: boolean;
   summaryModelProgress: number;
   summaryModelProgressInfo: SummaryModelProgressInfo;
+  selectedTranscriptionModel: string;
   selectedSummaryModel: string;
   databaseExists: boolean;
   isBackgroundDownloading: boolean;
@@ -53,6 +58,7 @@ interface OnboardingContextType {
   // Setters
   setParakeetDownloaded: (value: boolean) => void;
   setSummaryModelDownloaded: (value: boolean) => void;
+  setSelectedTranscriptionModel: (value: string) => void;
   setSelectedSummaryModel: (value: string) => void;
   setDatabaseExists: (value: boolean) => void;
   setPermissionStatus: (permission: keyof OnboardingPermissions, status: PermissionStatus) => void;
@@ -83,6 +89,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     totalMb: 0,
     speedMbps: 0,
   });
+  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>(PARAKEET_MODEL);
   const [selectedSummaryModel, setSelectedSummaryModel] = useState<string>('gemma3:1b');
   const [databaseExists, setDatabaseExists] = useState(false);
   const [isBackgroundDownloading, setIsBackgroundDownloading] = useState(false);
@@ -209,7 +216,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       'parakeet-model-download-progress',
       (event) => {
         const { modelName, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
-        if (modelName === PARAKEET_MODEL) {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && modelName === selectedTranscriptionModel) {
           setParakeetProgress(progress);
           setParakeetProgressInfo({
             percent: progress,
@@ -228,7 +235,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       'parakeet-model-download-complete',
       (event) => {
         const { modelName } = event.payload;
-        if (modelName === PARAKEET_MODEL) {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && modelName === selectedTranscriptionModel) {
           setParakeetDownloaded(true);
           setParakeetProgress(100);
         }
@@ -239,7 +246,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       'parakeet-model-download-error',
       (event) => {
         const { modelName } = event.payload;
-        if (modelName === PARAKEET_MODEL) {
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'parakeet' && modelName === selectedTranscriptionModel) {
           console.error('Parakeet download error:', event.payload.error);
         }
       }
@@ -250,7 +257,63 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       unlistenComplete.then(fn => fn());
       unlistenError.then(fn => fn());
     };
-  }, [selectedSummaryModel]);
+  }, [selectedTranscriptionModel]);
+
+  // Listen to Qwen3-ASR download progress when selected during onboarding
+  useEffect(() => {
+    const unlisten = listen<{
+      modelName: string;
+      progress: number;
+      downloaded_mb?: number;
+      total_mb?: number;
+      speed_mbps?: number;
+      status?: string;
+    }>(
+      'qwen3-asr-model-download-progress',
+      (event) => {
+        const { modelName, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && modelName === selectedTranscriptionModel) {
+          setParakeetProgress(progress);
+          setParakeetProgressInfo({
+            percent: progress,
+            downloadedMb: downloaded_mb ?? 0,
+            totalMb: total_mb ?? 0,
+            speedMbps: speed_mbps ?? 0,
+          });
+          if (status === 'completed' || progress >= 100) {
+            setParakeetDownloaded(true);
+          }
+        }
+      }
+    );
+
+    const unlistenComplete = listen<{ modelName: string }>(
+      'qwen3-asr-model-download-complete',
+      (event) => {
+        const { modelName } = event.payload;
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && modelName === selectedTranscriptionModel) {
+          setParakeetDownloaded(true);
+          setParakeetProgress(100);
+        }
+      }
+    );
+
+    const unlistenError = listen<{ modelName: string; error: string }>(
+      'qwen3-asr-model-download-error',
+      (event) => {
+        const { modelName } = event.payload;
+        if (getTranscriptionProvider(selectedTranscriptionModel) === 'qwen3Asr' && modelName === selectedTranscriptionModel) {
+          console.error('Qwen3-ASR download error:', event.payload.error);
+        }
+      }
+    );
+
+    return () => {
+      unlisten.then(fn => fn());
+      unlistenComplete.then(fn => fn());
+      unlistenError.then(fn => fn());
+    };
+  }, [selectedTranscriptionModel]);
 
   // Listen to summary model (Built-in AI) download progress
   useEffect(() => {
@@ -266,7 +329,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       (event) => {
         const { model, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
         // Check if this is the selected summary model (gemma3:1b or gemma3:4b)
-        if (model === selectedSummaryModel || model === 'gemma3:1b' || model === 'gemma3:4b') {
+        if (model === selectedSummaryModel) {
           setSummaryModelProgress(progress);
           setSummaryModelProgressInfo({
             percent: progress,
@@ -408,9 +471,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       // Onboarding always uses builtin-ai with selected model
       await invoke('complete_onboarding', {
         model: selectedSummaryModel,
+        transcriptionProvider: getTranscriptionProvider(selectedTranscriptionModel),
+        transcriptionModel: selectedTranscriptionModel,
       });
       setCompleted(true);
-      console.log('[OnboardingContext] Onboarding completed with model:', selectedSummaryModel);
+      console.log('[OnboardingContext] Onboarding completed with models:', {
+        transcription: selectedTranscriptionModel,
+        summary: selectedSummaryModel,
+      });
 
       // Reset the flag so subsequent state updates can be saved
       isCompletingRef.current = false;
@@ -429,16 +497,27 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     try {
       // Start Parakeet download first (speech recognition - always required)
       if (!parakeetDownloaded) {
-        console.log('[OnboardingContext] Starting Parakeet download');
-        invoke('parakeet_download_model', { modelName: PARAKEET_MODEL })
-          .catch(err => console.error('[OnboardingContext] Parakeet download failed:', err));
+        const transcriptionProvider = getTranscriptionProvider(selectedTranscriptionModel);
+        console.log('[OnboardingContext] Starting transcription model download', {
+          provider: transcriptionProvider,
+          model: selectedTranscriptionModel,
+        });
+
+        if (transcriptionProvider === 'qwen3Asr') {
+          invoke('qwen3_asr_init')
+            .then(() => invoke('qwen3_asr_download_model', { modelName: selectedTranscriptionModel }))
+            .catch(err => console.error('[OnboardingContext] Qwen3-ASR download failed:', err));
+        } else {
+          invoke('parakeet_download_model', { modelName: selectedTranscriptionModel })
+            .catch(err => console.error('[OnboardingContext] Parakeet download failed:', err));
+        }
       }
 
       // Start Gemma download after a delay to prioritize Parakeet bandwidth
       if (includeGemma && !summaryModelDownloaded) {
         setTimeout(() => {
           console.log('[OnboardingContext] Starting Gemma download (delayed to prioritize Parakeet)');
-          invoke('builtin_ai_download_model', { modelName: selectedSummaryModel || 'gemma3:1b' })
+          invoke('builtin_ai_download_model', { modelName: selectedSummaryModel })
             .catch(err => console.error('[OnboardingContext] Gemma download failed:', err));
         }, 3000); // 3 second delay to give Parakeet priority
       }
@@ -468,9 +547,18 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   };
 
   const retryParakeetDownload = async () => {
-    console.log('[OnboardingContext] Retrying Parakeet download');
+    const transcriptionProvider = getTranscriptionProvider(selectedTranscriptionModel);
+    console.log('[OnboardingContext] Retrying transcription model download', {
+      provider: transcriptionProvider,
+      model: selectedTranscriptionModel,
+    });
     try {
-      await invoke('parakeet_retry_download', { modelName: PARAKEET_MODEL });
+      if (transcriptionProvider === 'qwen3Asr') {
+        await invoke('qwen3_asr_init');
+        await invoke('qwen3_asr_download_model', { modelName: selectedTranscriptionModel });
+      } else {
+        await invoke('parakeet_retry_download', { modelName: selectedTranscriptionModel });
+      }
     } catch (error) {
       console.error('[OnboardingContext] Retry failed:', error);
       throw error;
@@ -514,6 +602,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         summaryModelDownloaded,
         summaryModelProgress,
         summaryModelProgressInfo,
+        selectedTranscriptionModel,
         selectedSummaryModel,
         databaseExists,
         isBackgroundDownloading,
@@ -524,6 +613,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         goPrevious,
         setParakeetDownloaded,
         setSummaryModelDownloaded,
+        setSelectedTranscriptionModel,
         setSelectedSummaryModel,
         setDatabaseExists,
         setPermissionStatus,
